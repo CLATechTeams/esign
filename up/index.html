@@ -615,59 +615,141 @@
         }
 
         // ===== GitHub API =====
-        async function githubRequest(endpoint, method = 'GET', data = null, token = null, repoInfo = null) {
-            const info = repoInfo || getRepoInfo();
-            if (!info) throw new Error('Invalid repository');
-            
-            const url = `https://api.github.com/repos/${info.owner}/${info.repo}${endpoint}`;
-            const headers = {
-                'Accept': 'application/vnd.github.v3+json',
-            };
-            
-            if (token) {
-                headers['Authorization'] = `token ${token}`;
+      async function githubRequest(endpoint, method = 'GET', data = null, token = null, repoInfo = null) {
+    const info = repoInfo || getRepoInfo();
+    if (!info) throw new Error('Invalid repository');
+    
+    const url = `https://api.github.com/repos/${info.owner}/${info.repo}${endpoint}`;
+    const headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'IPA-Mirror-Tool'
+    };
+    
+    if (token) {
+        headers['Authorization'] = `token ${token}`;
+    }
+
+    const options = { 
+        method, 
+        headers,
+        timeout: 300000 // 5 phút timeout cho file lớn
+    };
+
+    if (data) {
+        options.body = JSON.stringify(data);
+        headers['Content-Type'] = 'application/json';
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
+        
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            let errorMessage;
+            try {
+                const errorJson = JSON.parse(errorText);
+                errorMessage = errorJson.message || `HTTP ${response.status}`;
+            } catch {
+                errorMessage = `HTTP ${response.status}: ${errorText.substring(0, 200)}`;
             }
-
-            const options = { method, headers };
-
-            if (data) {
-                options.body = JSON.stringify(data);
-                headers['Content-Type'] = 'application/json';
-            }
-
-            const response = await fetch(url, options);
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || `HTTP ${response.status}`);
-            }
-
-            return response.json();
+            throw new Error(errorMessage);
         }
+
+        return response.json();
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Request timeout (5 phút)');
+        }
+        throw error;
+    }
+}
 
         async function uploadToGitHub(file, path, token, repoInfo, message = null) {
-            const content = await file.arrayBuffer();
-            const base64Content = btoa(String.fromCharCode(...new Uint8Array(content)));
+    try {
+        addLog(`📤 Đang mã hóa file ${file.name}...`, 'info');
+        
+        // Đọc file dưới dạng ArrayBuffer
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // Chuyển đổi ArrayBuffer sang Base64 một cách an toàn
+        const base64Content = arrayBufferToBase64(arrayBuffer);
+        
+        addLog(`✅ Mã hóa thành công (${(base64Content.length / 1024 / 1024).toFixed(2)} MB)`, 'info');
 
-            const data = {
-                message: message || `Upload ${file.name}`,
-                content: base64Content,
-                branch: repoInfo.branch
-            };
+        const data = {
+            message: message || `Upload ${file.name}`,
+            content: base64Content,
+            branch: repoInfo.branch
+        };
 
-            // Check if file exists
-            try {
-                const existing = await githubRequest(`/contents/${path}`, 'GET', null, token, repoInfo);
-                if (existing) {
-                    data.sha = existing.sha;
-                }
-            } catch (error) {
-                // File doesn't exist, continue
+        // Kiểm tra file đã tồn tại chưa
+        try {
+            const existing = await githubRequest(`/contents/${path}`, 'GET', null, token, repoInfo);
+            if (existing && existing.sha) {
+                data.sha = existing.sha;
+                addLog(`📝 File đã tồn tại, sẽ cập nhật`, 'info');
             }
-
-            const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo);
-            return result.content.download_url;
+        } catch (error) {
+            // File không tồn tại, tiếp tục
+            if (error.message.includes('404')) {
+                addLog(`📝 File mới, sẽ tạo mới`, 'info');
+            } else {
+                throw error;
+            }
         }
+
+        // Upload với chunk nếu file lớn
+        if (base64Content.length > 100 * 1024 * 1024) { // > 100MB
+            addLog(`⚠️ File lớn, đang upload từng phần...`, 'warning');
+            return await uploadLargeFile(base64Content, path, token, repoInfo, data);
+        }
+
+        const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo);
+        addLog(`✅ Upload thành công`, 'success');
+        return result.content.download_url;
+        
+    } catch (error) {
+        addLog(`❌ Lỗi upload: ${error.message}`, 'error');
+        throw error;
+    }
+}
+
+// Hàm chuyển ArrayBuffer sang Base64 an toàn
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192; // Xử lý từng chunk để tránh stack overflow
+    
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    
+    return btoa(binary);
+}
+
+// Xử lý upload file lớn
+async function uploadLargeFile(base64Content, path, token, repoInfo, data) {
+    // GitHub API giới hạn 100MB cho 1 request
+    // Chia nhỏ file nếu cần
+    const MAX_SIZE = 95 * 1024 * 1024; // 95MB để an toàn
+    
+    if (base64Content.length > MAX_SIZE) {
+        throw new Error(`File quá lớn (${(base64Content.length / 1024 / 1024).toFixed(1)} MB). GitHub giới hạn 100MB cho 1 file.`);
+    }
+    
+    // Upload bình thường
+    const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo);
+    return result.content.download_url;
+}
 
         // ===== Parse Plist =====
         function parsePlist(xmlText) {
@@ -813,34 +895,51 @@
         }
 
         // ===== Download IPA =====
-        async function downloadIPA(url) {
-            try {
-                addLog(`📥 Đang tải IPA từ: ${url}`, 'info');
-                updateProgress(30, 'Đang tải IPA...');
-                
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const contentLength = response.headers.get('content-length');
-                const size = contentLength ? parseInt(contentLength) : 0;
-                
-                const blob = await response.blob();
-                const fileName = url.split('/').pop() || 'app.ipa';
-                
-                const file = new File([blob], fileName, { type: 'application/octet-stream' });
-                
-                addLog(`✅ Đã tải IPA: ${(file.size / 1024 / 1024).toFixed(2)} MB`, 'success');
-                updateProgress(50, 'Đã tải IPA thành công');
-                
-                return file;
-            } catch (error) {
-                addLog(`❌ Lỗi tải IPA: ${error.message}`, 'error');
-                throw error;
-            }
+       async function downloadIPA(url) {
+    try {
+        addLog(`📥 Đang tải IPA từ: ${url}`, 'info');
+        updateProgress(30, 'Đang tải IPA...');
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
+        const contentLength = response.headers.get('content-length');
+        const totalSize = contentLength ? parseInt(contentLength) : 0;
+        
+        // Đọc dữ liệu theo stream để tránh lỗi bộ nhớ
+        const reader = response.body.getReader();
+        const chunks = [];
+        let loadedSize = 0;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            chunks.push(value);
+            loadedSize += value.length;
+            
+            if (totalSize > 0) {
+                const percent = Math.round((loadedSize / totalSize) * 100);
+                updateProgress(30 + (percent * 0.2), `Đang tải IPA... ${percent}%`);
+            }
+        }
+        
+        // Tạo blob từ chunks
+        const blob = new Blob(chunks);
+        const fileName = url.split('/').pop() || 'app.ipa';
+        const file = new File([blob], fileName, { type: 'application/octet-stream' });
+        
+        addLog(`✅ Đã tải IPA: ${(file.size / 1024 / 1024).toFixed(2)} MB`, 'success');
+        updateProgress(50, 'Đã tải IPA thành công');
+        
+        return file;
+    } catch (error) {
+        addLog(`❌ Lỗi tải IPA: ${error.message}`, 'error');
+        throw error;
+    }
+}
         // ===== Generate Plist =====
         function generatePlistContent(plistData, ipaUrl) {
             // Use ALL data from original plist
@@ -878,124 +977,123 @@
         }
 
         // ===== Main Mirror Process =====
-        async function startMirror() {
-            if (isProcessing) return;
-            if (!plistData) {
-                addLog('⚠️ Vui lòng tải plist trước', 'error');
-                return;
-            }
+       async function startMirror() {
+    if (isProcessing) return;
+    if (!plistData) {
+        addLog('⚠️ Vui lòng tải plist trước', 'error');
+        return;
+    }
 
-            const token = getToken();
-            if (!token) return;
+    const token = getToken();
+    if (!token) return;
 
-            const repoInfo = getRepoInfo();
-            if (!repoInfo) return;
+    const repoInfo = getRepoInfo();
+    if (!repoInfo) return;
 
-            isProcessing = true;
-            mirrorBtn.disabled = true;
-            mirrorBtn.textContent = '⏳ Đang xử lý...';
-            progressContainer.style.display = 'block';
-            logContainer.innerHTML = '';
-            logContainer.style.display = 'block';
-            resultBox.style.display = 'none';
-            setStatus('Đang xử lý...', 'processing');
+    isProcessing = true;
+    mirrorBtn.disabled = true;
+    mirrorBtn.textContent = '⏳ Đang xử lý...';
+    progressContainer.style.display = 'block';
+    logContainer.innerHTML = '';
+    logContainer.style.display = 'block';
+    resultBox.style.display = 'none';
+    setStatus('Đang xử lý...', 'processing');
 
-            try {
-                // Step 1: Download IPA
-                const ipaFile = await downloadIPA(plistData.ipaUrl);
-                
-                // Step 2: Upload IPA to GitHub
-                updateProgress(60, 'Đang upload IPA lên GitHub...');
-                addLog(`📤 Đang upload ${ipaFile.name} lên GitHub...`, 'info');
-                
-                const ipaPath = `uploads/${plistData.plistId}/${ipaFile.name}`;
-                const ipaUrl = await uploadToGitHub(
-                    ipaFile, 
-                    ipaPath, 
-                    token, 
-                    repoInfo,
-                    commitMsg.value || `Upload IPA for ${plistData.plistId}`
-                );
-                
-                addLog(`✅ Upload IPA thành công`, 'success');
-                addLog(`🔗 IPA URL: ${ipaUrl}`, 'info');
-                updateProgress(80, 'IPA đã được upload');
-
-                // Step 3: Update plist if auto update is checked
-                let finalPlistUrl = null;
-                if (autoUpdate.checked) {
-                    addLog(`🔄 Đang cập nhật plist với link IPA mới...`, 'info');
-                    updateProgress(85, 'Đang cập nhật plist...');
-                    
-                    // Generate new plist with ALL original data
-                    const newPlist = generatePlistContent(plistData, ipaUrl);
-                    
-                    // Upload plist
-                    const plistPath = `plists/${plistData.plistId}.plist`;
-                    const plistFile = new File(
-                        [newPlist], 
-                        `${plistData.plistId}.plist`, 
-                        { type: 'text/xml' }
-                    );
-                    
-                    await uploadToGitHub(
-                        plistFile,
-                        plistPath,
-                        token,
-                        repoInfo,
-                        commitMsg.value || `Update plist for ${plistData.plistId}`
-                    );
-                    
-                    finalPlistUrl = `https://${repoInfo.owner}.github.io/${repoInfo.repo}/${plistPath}`;
-                    addLog(`✅ Cập nhật plist thành công`, 'success');
-                } else {
-                    // Use original plist URL
-                    finalPlistUrl = plistData.url;
-                    addLog(`ℹ️ Giữ nguyên plist gốc (không cập nhật)`, 'info');
-                }
-
-                // Step 4: Show result
-                updateProgress(100, 'Hoàn tất!');
-                
-                const itmsLink = `itms-services://?action=download-manifest&url=${finalPlistUrl}`;
-                resultLink.value = itmsLink;
-                resultBox.style.display = 'block';
-
-                // Update stats
-                processedCount++;
-                totalSize += ipaFile.size;
-                localStorage.setItem('mirror_processed', processedCount);
-                localStorage.setItem('mirror_total_size', totalSize);
-                processedCountEl.textContent = processedCount;
-                totalSizeEl.textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
-                lastUpdateEl.textContent = new Date().toLocaleTimeString();
-
-                addLog(`🎉 Mirror hoàn tất!`, 'success');
-                addLog(`📱 Bundle ID: ${plistData.bundleId}`, 'info');
-                addLog(`📌 Version: ${plistData.bundleVersion}`, 'info');
-                addLog(`🔗 Link mới: ${itmsLink}`, 'link');
-                setStatus('Thành công ✅', 'success');
-
-                // Auto copy
-                navigator.clipboard.writeText(itmsLink).then(() => {
-                    addLog('📋 Đã copy link vào clipboard', 'success');
-                }).catch(() => {});
-
-            } catch (error) {
-                addLog(`❌ Lỗi: ${error.message}`, 'error');
-                setStatus('Thất bại ❌', 'error');
-                updateProgress(0, 'Đã xảy ra lỗi');
-            } finally {
-                isProcessing = false;
-                mirrorBtn.disabled = false;
-                mirrorBtn.textContent = '🚀 Bắt đầu Mirror';
-                setTimeout(() => {
-                    if (!isProcessing) {
-                        progressContainer.style.display = 'none';
-                    }
-                }, 3000);
-            }
+    try {
+        // Step 1: Download IPA
+        const ipaFile = await downloadIPA(plistData.ipaUrl);
+        
+        // Step 2: Upload IPA to GitHub
+        updateProgress(60, 'Đang upload IPA lên GitHub...');
+        addLog(`📤 Đang upload ${ipaFile.name} lên GitHub...`, 'info');
+        
+        // Kiểm tra kích thước file
+        const fileSizeMB = ipaFile.size / 1024 / 1024;
+        if (fileSizeMB > 95) {
+            addLog(`⚠️ File ${fileSizeMB.toFixed(1)} MB > 95 MB, GitHub có thể từ chối`, 'warning');
         }
+        
+        const ipaPath = `uploads/${plistData.plistId}/${ipaFile.name}`;
+        const ipaUrl = await uploadToGitHub(
+            ipaFile, 
+            ipaPath, 
+            token, 
+            repoInfo,
+            commitMsg.value || `Upload IPA for ${plistData.plistId}`
+        );
+        
+        addLog(`✅ Upload IPA thành công`, 'success');
+        addLog(`🔗 IPA URL: ${ipaUrl}`, 'info');
+        updateProgress(80, 'IPA đã được upload');
+
+        // Step 3: Update plist
+        if (autoUpdate.checked) {
+            addLog(`🔄 Đang cập nhật plist với link IPA mới...`, 'info');
+            updateProgress(85, 'Đang cập nhật plist...');
+            
+            const newPlist = generatePlistContent(plistData, ipaUrl);
+            const plistPath = `plists/${plistData.plistId}.plist`;
+            const plistFile = new File(
+                [newPlist], 
+                `${plistData.plistId}.plist`, 
+                { type: 'text/xml' }
+            );
+            
+            await uploadToGitHub(
+                plistFile,
+                plistPath,
+                token,
+                repoInfo,
+                commitMsg.value || `Update plist for ${plistData.plistId}`
+            );
+            
+            const finalPlistUrl = `https://${repoInfo.owner}.github.io/${repoInfo.repo}/${plistPath}`;
+            addLog(`✅ Cập nhật plist thành công`, 'success');
+            
+            // Step 4: Show result
+            updateProgress(100, 'Hoàn tất!');
+            const itmsLink = `itms-services://?action=download-manifest&url=${finalPlistUrl}`;
+            resultLink.value = itmsLink;
+            resultBox.style.display = 'block';
+
+            // Update stats
+            processedCount++;
+            totalSize += ipaFile.size;
+            localStorage.setItem('mirror_processed', processedCount);
+            localStorage.setItem('mirror_total_size', totalSize);
+            processedCountEl.textContent = processedCount;
+            totalSizeEl.textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
+            lastUpdateEl.textContent = new Date().toLocaleTimeString();
+
+            addLog(`🎉 Mirror hoàn tất!`, 'success');
+            addLog(`📱 Bundle ID: ${plistData.bundleId}`, 'info');
+            addLog(`📌 Version: ${plistData.bundleVersion}`, 'info');
+            addLog(`🔗 Link mới: ${itmsLink}`, 'link');
+            setStatus('Thành công ✅', 'success');
+
+            navigator.clipboard.writeText(itmsLink).then(() => {
+                addLog('📋 Đã copy link vào clipboard', 'success');
+            }).catch(() => {});
+        }
+
+    } catch (error) {
+        addLog(`❌ Lỗi: ${error.message}`, 'error');
+        if (error.stack) {
+            addLog(`📚 Stack: ${error.stack.substring(0, 500)}...`, 'error');
+        }
+        setStatus('Thất bại ❌', 'error');
+        updateProgress(0, 'Đã xảy ra lỗi');
+    } finally {
+        isProcessing = false;
+        mirrorBtn.disabled = false;
+        mirrorBtn.textContent = '🚀 Bắt đầu Mirror';
+        setTimeout(() => {
+            if (!isProcessing) {
+                progressContainer.style.display = 'none';
+            }
+        }, 3000);
+    }
+}
 
         // ===== Event Listeners =====
         fetchBtn.addEventListener('click', async () => {
