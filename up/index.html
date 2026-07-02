@@ -887,10 +887,15 @@
                     throw new Error(errorMessage);
                 }
                 return response.json();
-            } catch (error) {
-                if (error.name === 'AbortError') throw new Error('Request timeout (5 phút)');
-                throw error;
-            }
+            } 
+catch (error) {
+    addLog('❌ Lỗi API: ' + error.message, 'error');
+    if (error.response) {
+        addLog('📊 Response status: ' + error.response.status, 'error');
+    }
+    if (error.name === 'AbortError') throw new Error('Request timeout (5 phút)');
+    throw error;
+}
         }
 
         async function checkRepoAccess(token, repoInfo) {
@@ -1485,7 +1490,9 @@ window.selectApp = function(index) {
             }
         }
 
-    async function updateSelectedAppLink() {
+   async function updateSelectedAppLink() {
+    addLog('🔍 BẮT ĐẦU CẬP NHẬT LINK...', 'info');
+    
     // Kiểm tra đã chọn app chưa
     if (!selectedApp) {
         addLog('⚠️ Vui lòng chọn app trước', 'error');
@@ -1503,13 +1510,20 @@ window.selectApp = function(index) {
     }
     
     var token = getToken();
-    if (!token) return;
+    if (!token) {
+        addLog('⚠️ Chưa có token', 'error');
+        return;
+    }
     
     var repoInfo = getRepoInfo();
-    if (!repoInfo) return;
+    if (!repoInfo) {
+        addLog('⚠️ Chưa có repo info', 'error');
+        return;
+    }
     
     addLog('🔄 Đang cập nhật link cho "' + selectedApp.title + '" trên trang index...', 'info');
     addLog('📄 File: ' + indexPagePath.value, 'info');
+    addLog('📂 Repo: ' + repoInfo.owner + '/' + repoInfo.repo, 'info');
     
     try {
         var indexPath = indexPagePath.value.trim() || 'index.html';
@@ -1520,8 +1534,10 @@ window.selectApp = function(index) {
         var sha = result.sha;
         var content = atob(result.content);
         addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
+        addLog('📝 SHA của file: ' + sha.substring(0, 8) + '...', 'info');
         
         // Parse và update HTML
+        addLog('🔍 Đang parse HTML...', 'info');
         var parser = new DOMParser();
         var doc = parser.parseFromString(content, 'text/html');
         
@@ -1542,9 +1558,11 @@ window.selectApp = function(index) {
                 throw new Error('Không tìm thấy container #' + currentAppType + '-list trong HTML');
             }
         }
+        addLog('✅ Đã tìm thấy container', 'success');
         
         var appRows = container.querySelectorAll('.app-row');
         addLog('📱 Tìm thấy ' + appRows.length + ' app trong container', 'info');
+        addLog('📱 Index cần tìm: ' + selectedApp.index, 'info');
         
         if (selectedApp.index >= appRows.length) {
             throw new Error('Không tìm thấy app index ' + selectedApp.index + ' trong HTML (có ' + appRows.length + ' app)');
@@ -1556,11 +1574,22 @@ window.selectApp = function(index) {
         
         // Cập nhật href với link mới
         targetRow.setAttribute('href', newLink);
-        addLog('📝 Link mới: ' + newLink, 'success');
+        addLog('📝 Đã set link mới: ' + newLink, 'success');
         
         // Cập nhật lại HTML
+        addLog('🔄 Đang tạo HTML mới...', 'info');
         var newHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-        var base64Content = btoa(unescape(encodeURIComponent(newHtml)));
+        addLog('📝 HTML mới dài: ' + newHtml.length + ' ký tự', 'info');
+        
+        // Chuyển sang base64
+        addLog('🔄 Đang mã hóa base64...', 'info');
+        try {
+            var base64Content = btoa(unescape(encodeURIComponent(newHtml)));
+            addLog('✅ Mã hóa base64 thành công, dài: ' + base64Content.length + ' ký tự', 'success');
+        } catch (encodeError) {
+            addLog('❌ Lỗi mã hóa base64: ' + encodeError.message, 'error');
+            throw encodeError;
+        }
         
         var updateData = {
             message: 'Update link for ' + selectedApp.title + ' - ' + new Date().toLocaleString(),
@@ -1570,7 +1599,9 @@ window.selectApp = function(index) {
         };
         
         addLog('📤 Đang upload file lên GitHub...', 'info');
-        await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
+        var uploadResult = await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
+        addLog('✅ Upload thành công!', 'success');
+        addLog('📝 Commit SHA: ' + (uploadResult.commit ? uploadResult.commit.sha.substring(0, 8) : 'N/A'), 'info');
         
         addLog('✅ Đã cập nhật link cho "' + selectedApp.title + '" thành công!', 'success');
         var pageUrl = 'https://' + repoInfo.owner + '.github.io/' + repoInfo.repo + '/';
@@ -1589,7 +1620,7 @@ window.selectApp = function(index) {
         
     } catch (error) {
         addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
-        if (error.stack) addLog('📚 ' + error.stack.substring(0, 300) + '...', 'error');
+        if (error.stack) addLog('📚 Stack: ' + error.stack.substring(0, 500) + '...', 'error');
         setStatus('Cập nhật thất bại', 'error');
     }
 }
