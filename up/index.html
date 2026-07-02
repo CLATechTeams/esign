@@ -1069,91 +1069,87 @@ function parsePlist(xmlText) {
     var parser = new DOMParser();
     var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
     
-    // Lấy tất cả string elements
-    var strings = xmlDoc.getElementsByTagName('string');
-    var allStrings = [];
-    for (var i = 0; i < strings.length; i++) {
-        allStrings.push(strings[i].textContent);
-    }
-    
-    // Log để debug
-    console.log('📄 All strings in plist:', allStrings);
-    
-    // Tìm IPA URL - ưu tiên URL kết thúc bằng .ipa
+    // Tìm tất cả dict
+    var dicts = xmlDoc.getElementsByTagName('dict');
     var ipaUrl = null;
-    for (var j = 0; j < allStrings.length; j++) {
-        var str = allStrings[j];
-        if (str.indexOf('http') === 0 && (str.indexOf('.ipa') !== -1 || str.indexOf('/ipa/') !== -1)) {
-            ipaUrl = str;
-            break;
-        }
-    }
-    
-    // Tìm bundle-identifier - tìm trong tất cả string
     var bundleId = null;
-    for (var k = 0; k < allStrings.length; k++) {
-        var str = allStrings[k];
-        // Kiểm tra nếu string chứa bundle-identifier
-        if (str.indexOf('bundle-identifier') !== -1 || str.indexOf('bundle.identifier') !== -1) {
-            if (k + 1 < allStrings.length) {
-                bundleId = allStrings[k + 1];
-                break;
-            }
-        }
-        // Hoặc string có dạng com.xxx.xxx
-        if (str.match(/^com\.[a-zA-Z0-9\.]+$/)) {
-            bundleId = str;
-            // Không break vì có thể có nhiều, nhưng lấy cái đầu tiên
-            if (!bundleId) bundleId = str;
-        }
-    }
-    
-    // Tìm bundle-version - tìm trong tất cả string
     var bundleVersion = null;
-    for (var l = 0; l < allStrings.length; l++) {
-        var str = allStrings[l];
-        if (str.indexOf('bundle-version') !== -1 || str.indexOf('bundle.version') !== -1) {
-            if (l + 1 < allStrings.length) {
-                bundleVersion = allStrings[l + 1];
-                break;
-            }
-        }
-        // Hoặc string có dạng số phiên bản X.X.X
-        if (str.match(/^\d+\.\d+\.\d+$/)) {
-            bundleVersion = str;
-            break;
-        }
-    }
-    
-    // Tìm title - tìm trong tất cả string
     var appName = null;
-    for (var m = 0; m < allStrings.length; m++) {
-        var str = allStrings[m];
-        if (str.indexOf('title') !== -1 || str.indexOf('Title') !== -1) {
-            if (m + 1 < allStrings.length) {
-                appName = allStrings[m + 1];
+    
+    // Duyệt qua tất cả dict
+    for (var i = 0; i < dicts.length; i++) {
+        var dict = dicts[i];
+        var children = dict.children;
+        var keys = [];
+        var values = [];
+        
+        // Thu thập tất cả key và value trong dict
+        for (var j = 0; j < children.length; j++) {
+            if (children[j].tagName === 'key') {
+                keys.push(children[j].textContent);
+            } else if (children[j].tagName === 'string') {
+                values.push(children[j].textContent);
+            }
+        }
+        
+        // Kiểm tra xem đây có phải là metadata dict không
+        var isMetadata = false;
+        var isAssets = false;
+        for (var k = 0; k < keys.length; k++) {
+            if (keys[k] === 'metadata') {
+                isMetadata = true;
+                break;
+            }
+            if (keys[k] === 'assets') {
+                isAssets = true;
+                break;
+            }
+        }
+        
+        if (isMetadata) {
+            // Đây là metadata dict, lấy bundle-identifier, bundle-version, title
+            for (var m = 0; m < keys.length; m++) {
+                if (keys[m] === 'bundle-identifier' && m < values.length) {
+                    bundleId = values[m];
+                }
+                if (keys[m] === 'bundle-version' && m < values.length) {
+                    bundleVersion = values[m];
+                }
+                if (keys[m] === 'title' && m < values.length) {
+                    appName = values[m];
+                }
+            }
+        }
+        
+        if (isAssets) {
+            // Đây là assets dict, tìm URL
+            for (var n = 0; n < keys.length; n++) {
+                if (keys[n] === 'url' && n < values.length) {
+                    var url = values[n];
+                    if (url.indexOf('http') === 0 && (url.indexOf('.ipa') !== -1 || url.indexOf('/ipa/') !== -1)) {
+                        ipaUrl = url;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Nếu chưa tìm thấy IPA URL, thử tìm trong tất cả string
+    if (!ipaUrl) {
+        var strings = xmlDoc.getElementsByTagName('string');
+        for (var p = 0; p < strings.length; p++) {
+            var str = strings[p].textContent;
+            if (str.indexOf('http') === 0 && (str.indexOf('.ipa') !== -1 || str.indexOf('/ipa/') !== -1)) {
+                ipaUrl = str;
                 break;
             }
         }
     }
     
-    // Nếu vẫn chưa tìm thấy appName, lấy string đầu tiên không phải URL
-    if (!appName) {
-        for (var n = 0; n < allStrings.length; n++) {
-            var str = allStrings[n];
-            if (str && str.indexOf('http') !== 0 && str.length > 0 && str.length < 100) {
-                appName = str;
-                break;
-            }
-        }
-    }
+    if (!bundleId) bundleId = '';
+    if (!bundleVersion) bundleVersion = '';
+    if (!appName) appName = '';
     
-    // Fallback values
-    if (!bundleId) bundleId = 'com.esign.app';
-    if (!bundleVersion) bundleVersion = '1.0.0';
-    if (!appName) appName = 'ESign';
-    
-    // Lấy appSub từ URL
     var appSub = 'Unknown';
     if (ipaUrl) {
         var urlMatch = ipaUrl.match(/\/\/([^\/]+)/);
@@ -1470,19 +1466,44 @@ function parsePlist(xmlText) {
         }
 
         // ===== CHỌN APP ĐỂ GÁN LINK =====
-        window.selectAppForLink = function(index) {
-            if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
-                selectedAppIndex = index;
-                var app = currentAppList[index];
-                linkInputGroup.style.display = 'block';
-                linkInputLabel.textContent = '🔗 Link plist mới cho "' + app.title + '"';
-                appNewLinkInput.value = '';
-                appNewLinkInput.focus();
-                appNewLinkInput.placeholder = 'Nhập link plist mới cho ' + app.title + '...';
-                renderAppList();
-                addLog('📱 Đã chọn: ' + app.title + ' - ' + app.sub, 'success');
-            }
-        };
+        // ===== CHỌN APP VÀ TỰ ĐỘNG GÁN LINK MỚI NHẤT =====
+window.selectAppForLink = function(index) {
+    if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
+        selectedAppIndex = index;
+        var app = currentAppList[index];
+        
+        // Lấy link mới nhất từ resultLink
+        var newLink = resultLink.value;
+        
+        if (newLink && newLink.indexOf('itms-services://') !== -1) {
+            // Tự động gán link mới nhất cho app
+            assignedApps[index] = {
+                app: app,
+                newLink: newLink,
+                oldLink: app.plistUrl
+            };
+            addLog('✅ Tự động gán link mới nhất cho "' + app.title + '"', 'success');
+            addLog('🔗 ' + newLink, 'link');
+            
+            // Clear input và ẩn group
+            appNewLinkInput.value = '';
+            linkInputGroup.style.display = 'none';
+            selectedAppIndex = null;
+            updateAssignedUI();
+            renderAppList();
+        } else {
+            // Nếu chưa có link mới, hiển thị input để nhập thủ công
+            linkInputGroup.style.display = 'block';
+            linkInputLabel.textContent = '🔗 Link plist mới cho "' + app.title + '" (chưa có link mới từ Mirror)';
+            appNewLinkInput.value = '';
+            appNewLinkInput.focus();
+            appNewLinkInput.placeholder = 'Nhập link plist mới cho ' + app.title + '...';
+            renderAppList();
+            addLog('📱 Đã chọn: ' + app.title + ' - ' + app.sub, 'success');
+            addLog('💡 Chưa có link mới, vui lòng nhập thủ công hoặc Mirror trước', 'warning');
+        }
+    }
+};
 
         // ===== GÁN LINK CHO APP =====
         addLinkBtn.addEventListener('click', function() {
