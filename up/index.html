@@ -477,13 +477,54 @@
                 Tự động cập nhật plist với link IPA mới
             </label>
         </div>
-<button class="btn btn-secondary" id="testConnectionBtn" style="margin-top: 10px; width: 100%;">
-    🔌 Kiểm tra kết nối GitHub
-</button>
+
         <button class="btn btn-full" id="mirrorBtn" disabled>
             🚀 Bắt đầu Mirror
         </button>
+<br>
+        <!-- App List Management -->
+<div class="info-box" style="border-left-color: #d29922; margin-top: 20px;">
+    <strong>📱 Quản lý danh sách ứng dụng</strong><br>
+    Chọn app để cập nhật link sau khi mirror thành công
+</div>
 
+<div class="form-group">
+    <label>Chọn loại ứng dụng</label>
+    <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" id="loadESignBtn" style="flex:1;">📱 ESign</button>
+        <button class="btn btn-secondary" id="loadKSignBtn" style="flex:1;">🔑 KSign</button>
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="appListSelect">📋 Danh sách ứng dụng</label>
+    <select id="appListSelect" style="height: 200px; font-size: 13px;">
+        <option value="">-- Tải danh sách app --</option>
+    </select>
+    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+        Click vào app để chọn, sau đó nhấn "Cập nhật link"
+    </div>
+</div>
+
+<div style="display: flex; gap: 10px; margin-top: 10px;">
+    <button class="btn" id="updateAppLinkBtn" style="flex:1;" disabled>
+        🔄 Cập nhật link cho app đã chọn
+    </button>
+    <button class="btn btn-secondary" id="refreshAppListBtn" style="flex:0.5;">
+        🔄 Làm mới
+    </button>
+</div>
+
+<!-- Preview selected app -->
+<div id="selectedAppPreview" style="display: none; margin-top: 10px; padding: 10px; background: #0d1117; border-radius: 6px; border: 1px solid #21262d;">
+    <div style="font-size: 13px; color: #8b949e;">
+        Đã chọn: <span id="selectedAppName" style="color: #f0f6fc; font-weight: 600;">-</span>
+        <span id="selectedAppSub" style="color: #58a6ff;">-</span>
+    </div>
+    <div style="font-size: 12px; color: #8b949e; margin-top: 4px; word-break: break-all;">
+        Link hiện tại: <span id="selectedAppLink" style="color: #d29922;">-</span>
+    </div>
+</div>
         <!-- Progress -->
         <div class="progress-container" id="progressContainer">
             <div class="progress-info">
