@@ -386,6 +386,136 @@
                 grid-template-columns: 1fr 1fr;
             }
         }
+        /* App List Styles */
+.app-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    margin: 4px 0;
+    background: #161b22;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.app-item:hover {
+    background: #1c2333;
+    border-color: #30363d;
+    transform: translateX(4px);
+}
+
+.app-item.active {
+    background: #1c2333;
+    border-color: #238636;
+    box-shadow: 0 0 0 1px #238636;
+}
+
+.app-item .app-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #0d1117;
+    border: 1px solid #30363d;
+}
+
+.app-item .app-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-item .app-title {
+    font-weight: 600;
+    color: #f0f6fc;
+    font-size: 14px;
+}
+
+.app-item .app-sub {
+    color: #8b949e;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.app-item .app-status {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.app-item .app-status.has-link {
+    background: #1c2333;
+    color: #58a6ff;
+}
+
+.app-item .app-status.no-link {
+    background: #1c2333;
+    color: #d29922;
+}
+
+.app-item .app-index {
+    color: #484f58;
+    font-size: 11px;
+    font-family: monospace;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: right;
+}
+
+/* Scrollbar */
+#appListContainer::-webkit-scrollbar {
+    width: 6px;
+}
+
+#appListContainer::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 4px;
+}
+
+#appListContainer::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 4px;
+}
+
+#appListContainer::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
+}
+
+/* Loading state */
+.app-loading {
+    text-align: center;
+    padding: 30px 20px;
+    color: #8b949e;
+}
+
+.app-loading .spinner {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border: 2px solid #30363d;
+    border-top-color: #58a6ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.app-empty {
+    text-align: center;
+    padding: 30px 20px;
+    color: #8b949e;
+    font-style: italic;
+}
+
+.app-empty .icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
     </style>
 </head>
 <body>
@@ -444,18 +574,15 @@
         <div class="form-group">
             <label for="githubToken">🔑 GitHub Token</label>
             <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="font-family: monospace;">
-            <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
-                Tạo tại Settings → Developer settings → Personal access tokens → Tokens (classic)<br>
-                Cần quyền: <strong>repo</strong> và <strong>workflow</strong>
-            </div>
+           
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="repoOwner">👤 GitHub Username</label>
             <input type="text" id="repoOwner" value="clatechteams" placeholder="username" style="font-family: monospace;">
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="repoName">📂 Repository Name</label>
             <input type="text" id="repoName" value="esign" placeholder="repository-name" style="font-family: monospace;">
             <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
@@ -464,12 +591,12 @@
             </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="repoBranch">🌿 Branch</label>
             <input type="text" id="repoBranch" value="main" style="font-family: monospace;">
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="indexPagePath">📄 Trang index chính</label>
             <input type="text" id="indexPagePath" value="index.html" placeholder="index.html" style="font-family: monospace;">
             <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
@@ -477,12 +604,12 @@
             </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="commitMsg">📝 Commit Message (tùy chọn)</label>
             <input type="text" id="commitMsg" placeholder="Mirror IPA from plist">
         </div>
 
-        <div class="checkbox-group">
+        <div class="checkbox-group" hidden>
             <input type="checkbox" id="autoUpdate" checked>
             <label for="autoUpdate" style="margin: 0; font-size: 13px; color: #8b949e;">
                 Tự động cập nhật plist với link IPA mới
@@ -493,49 +620,56 @@
             🚀 Bắt đầu Mirror
         </button>
 
-        <!-- App List Management -->
-        <div class="info-box" style="border-left-color: #d29922; margin-top: 20px;">
-            <strong>📱 Quản lý danh sách ứng dụng</strong><br>
-            Chọn app để cập nhật link sau khi mirror thành công
-        </div>
+       <!-- App List Management -->
+<div class="info-box" style="border-left-color: #d29922; margin-top: 20px;">
+    <strong>📱 Quản lý danh sách ứng dụng</strong><br>
+    Chọn app để cập nhật link sau khi mirror thành công
+</div>
 
-        <div class="form-group">
-            <label>Chọn loại ứng dụng</label>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-secondary" id="loadESignBtn" style="flex:1;">📱 ESign</button>
-                <button class="btn btn-secondary" id="loadKSignBtn" style="flex:1;">🔑 KSign</button>
-            </div>
-        </div>
+<div class="form-group">
+    <label>Chọn loại ứng dụng</label>
+    <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" id="loadESignBtn" style="flex:1;">📱 ESign</button>
+        <button class="btn btn-secondary" id="loadKSignBtn" style="flex:1;">🔑 KSign</button>
+    </div>
+</div>
 
-        <div class="form-group">
-            <label for="appListSelect">📋 Danh sách ứng dụng</label>
-            <select id="appListSelect" style="height: 200px; font-size: 13px;">
-                <option value="">-- Tải danh sách app --</option>
-            </select>
-            <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
-                Click vào app để chọn, sau đó nhấn "Cập nhật link"
-            </div>
+<div class="form-group">
+    <label for="appListSelect">📋 Danh sách ứng dụng</label>
+    <div id="appListContainer" style="max-height: 300px; overflow-y: auto; background: #0d1117; border-radius: 8px; border: 1px solid #30363d; padding: 8px;">
+        <div style="text-align: center; color: #8b949e; padding: 20px; font-style: italic;">
+            🔄 Chọn ESign hoặc KSign để tải danh sách
         </div>
+    </div>
+    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+        Click vào app để chọn, sau đó nhấn "Cập nhật link"
+    </div>
+</div>
 
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button class="btn" id="updateAppLinkBtn" style="flex:1;" disabled>
-                🔄 Cập nhật link cho app đã chọn
-            </button>
-            <button class="btn btn-secondary" id="refreshAppListBtn" style="flex:0.5;">
-                🔄 Làm mới
-            </button>
-        </div>
+<div style="display: flex; gap: 10px; margin-top: 10px;">
+    <button class="btn" id="updateAppLinkBtn" style="flex:1;" disabled>
+        🔄 Cập nhật link cho app đã chọn
+    </button>
+    <button class="btn btn-secondary" id="refreshAppListBtn" style="flex:0.5;">
+        🔄 Làm mới
+    </button>
+</div>
 
-        <!-- Preview selected app -->
-        <div id="selectedAppPreview" style="display: none; margin-top: 10px; padding: 10px; background: #0d1117; border-radius: 6px; border: 1px solid #21262d;">
-            <div style="font-size: 13px; color: #8b949e;">
-                Đã chọn: <span id="selectedAppName" style="color: #f0f6fc; font-weight: 600;">-</span>
-                <span id="selectedAppSub" style="color: #58a6ff;">-</span>
-            </div>
-            <div style="font-size: 12px; color: #8b949e; margin-top: 4px; word-break: break-all;">
-                Link hiện tại: <span id="selectedAppLink" style="color: #d29922;">-</span>
-            </div>
+<!-- Preview selected app -->
+<div id="selectedAppPreview" style="display: none; margin-top: 10px; padding: 12px 16px; background: #0d1117; border-radius: 8px; border: 1px solid #238636;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <span style="font-size: 13px; color: #8b949e;">✅ Đã chọn:</span>
+            <span id="selectedAppName" style="color: #f0f6fc; font-weight: 600; margin-left: 8px;">-</span>
+            <span id="selectedAppSub" style="color: #58a6ff; font-size: 13px; margin-left: 6px;">-</span>
         </div>
+        <span style="font-size: 11px; color: #238636; background: #1c2333; padding: 2px 10px; border-radius: 12px;">Sẵn sàng</span>
+    </div>
+    <div style="font-size: 12px; color: #8b949e; margin-top: 6px; word-break: break-all; display: flex; align-items: center; gap: 8px;">
+        <span>🔗 Link hiện tại:</span>
+        <span id="selectedAppLink" style="color: #d29922; font-family: monospace; font-size: 11px;">-</span>
+    </div>
+</div>
 
         <!-- Progress -->
         <div class="progress-container" id="progressContainer">
@@ -1366,108 +1500,213 @@
         }
 
         // ===== Load apps from index page =====
-        async function loadAppsFromIndexPage(type) {
-            const token = getToken();
-            if (!token) {
-                addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
-                return;
-            }
-            
-            const repoInfo = getRepoInfo();
-            if (!repoInfo) {
-                addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
-                return;
-            }
-            
-            currentAppType = type;
-            const typeName = type === 'esign' ? 'ESign' : 'KSign';
-            
-            addLog(`📥 Đang tải danh sách ${typeName} từ trang index...`, 'info');
-            
-            try {
-                const indexPath = indexPagePath.value.trim() || 'index.html';
-                let content;
-                
-                try {
-                    const result = await githubRequest(`/contents/${indexPath}`, 'GET', null, token, repoInfo, true);
-                    content = atob(result.content);
-                    addLog(`✅ Đã tải file ${indexPath} từ GitHub (${content.length} ký tự)`, 'success');
-                } catch (error) {
-                    if (error.isFileNotFound || error.status === 404) {
-                        addLog(`⚠️ File ${indexPath} chưa tồn tại trên GitHub`, 'warning');
-                        addLog(`💡 Hãy upload file index.html lên GitHub trước`, 'info');
-                        addLog(`📁 Đường dẫn: ${repoInfo.owner}/${repoInfo.repo}/${indexPath}`, 'info');
-                        return;
-                    }
-                    throw error;
-                }
-                
-                currentAppList = parseAppListFromHTML(content, type);
-                
-                if (currentAppList.length === 0) {
-                    addLog(`⚠️ Không tìm thấy app nào trong ${typeName}`, 'warning');
-                    addLog(`💡 Kiểm tra lại cấu trúc HTML: cần có ID #${type}-list và class .app-row`, 'info');
-                    return;
-                }
-                
-                appListSelect.innerHTML = '';
-                currentAppList.forEach((app, index) => {
-                    const option = document.createElement('option');
-                    option.value = index;
-                    const label = `${app.title} - ${app.sub}`;
-                    option.textContent = label;
-                    if (app.plistUrl) {
-                        option.setAttribute('data-plist', app.plistUrl);
-                    }
-                    appListSelect.appendChild(option);
-                });
-                
-                appListSelect.disabled = false;
-                updateAppLinkBtn.disabled = true;
-                
-                addLog(`✅ Đã tải ${currentAppList.length} ứng dụng ${typeName} từ trang index`, 'success');
-                
-                if (currentAppList.length > 0) {
-                    appListSelect.selectedIndex = 0;
-                    selectApp(0);
-                }
-                
-                setStatus(`Đã tải ${currentAppList.length} app ${typeName}`, 'success');
-                
-            } catch (error) {
-                addLog(`❌ Lỗi tải danh sách: ${error.message}`, 'error');
-                if (error.stack) {
-                    addLog(`📚 ${error.stack.substring(0, 300)}...`, 'error');
-                }
-                setStatus('Lỗi tải danh sách', 'error');
-            }
+       // ===== Render app list =====
+function renderAppList() {
+    const container = document.getElementById('appListContainer');
+    
+    if (!currentAppList || currentAppList.length === 0) {
+        container.innerHTML = `
+            <div class="app-empty">
+                <div class="icon">📭</div>
+                <div>Chưa có ứng dụng nào</div>
+                <div style="font-size: 12px; margin-top: 4px;">Hãy chọn ESign hoặc KSign để tải danh sách</div>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    currentAppList.forEach((app, index) => {
+        const isActive = selectedApp && selectedApp.index === index;
+        const hasLink = app.plistUrl && app.plistUrl !== '';
+        const statusClass = hasLink ? 'has-link' : 'no-link';
+        const statusText = hasLink ? '✅ Có link' : '⚠️ Chưa có link';
+        const iconHtml = app.icon ? `<img src="${app.icon}" class="app-icon" alt="${app.title}">` : `<div class="app-icon" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:#1c2333;">📱</div>`;
+        
+        html += `
+            <div class="app-item ${isActive ? 'active' : ''}" data-index="${index}" onclick="selectApp(${index})">
+                ${iconHtml}
+                <div class="app-info">
+                    <div class="app-title">${app.title}</div>
+                    <div class="app-sub">${app.sub}</div>
+                </div>
+                <span class="app-status ${statusClass}">${statusText}</span>
+                <span class="app-index">#${index + 1}</span>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Scroll to selected app
+    if (selectedApp) {
+        const activeItem = container.querySelector('.app-item.active');
+        if (activeItem) {
+            activeItem.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
+    }
+}
 
-        // ===== Select app from list =====
-        function selectApp(index) {
-            addLog(`🔍 Đang chọn app tại index ${index}...`, 'info');
-            
-            if (index < 0 || index >= currentAppList.length) {
-                selectedApp = null;
-                selectedAppPreview.style.display = 'none';
-                updateAppLinkBtn.disabled = true;
-                addLog(`⚠️ Index ${index} không hợp lệ`, 'warning');
+// ===== Load apps from index page =====
+async function loadAppsFromIndexPage(type) {
+    const token = getToken();
+    if (!token) {
+        addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
+        return;
+    }
+    
+    const repoInfo = getRepoInfo();
+    if (!repoInfo) {
+        addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
+        return;
+    }
+    
+    currentAppType = type;
+    const typeName = type === 'esign' ? 'ESign' : 'KSign';
+    
+    // Hiển thị loading
+    const container = document.getElementById('appListContainer');
+    container.innerHTML = `
+        <div class="app-loading">
+            <div class="spinner"></div>
+            <div style="margin-top: 10px;">Đang tải danh sách ${typeName}...</div>
+        </div>
+    `;
+    
+    addLog(`📥 Đang tải danh sách ${typeName} từ trang index...`, 'info');
+    
+    try {
+        const indexPath = indexPagePath.value.trim() || 'index.html';
+        let content;
+        
+        try {
+            const result = await githubRequest(`/contents/${indexPath}`, 'GET', null, token, repoInfo, true);
+            content = atob(result.content);
+            addLog(`✅ Đã tải file ${indexPath} từ GitHub`, 'success');
+        } catch (error) {
+            if (error.isFileNotFound || error.status === 404) {
+                container.innerHTML = `
+                    <div class="app-empty">
+                        <div class="icon">📄</div>
+                        <div>File ${indexPath} chưa tồn tại</div>
+                        <div style="font-size: 12px; margin-top: 4px;">Hãy upload file index.html lên GitHub</div>
+                    </div>
+                `;
+                addLog(`⚠️ File ${indexPath} chưa tồn tại trên GitHub`, 'warning');
                 return;
             }
-            
-            selectedApp = currentAppList[index];
-            selectedAppName.textContent = selectedApp.title;
-            selectedAppSub.textContent = selectedApp.sub;
-            selectedAppLink.textContent = selectedApp.plistUrl || 'Chưa có link';
-            selectedAppPreview.style.display = 'block';
+            throw error;
+        }
+        
+        currentAppList = parseAppListFromHTML(content, type);
+        
+        if (currentAppList.length === 0) {
+            container.innerHTML = `
+                <div class="app-empty">
+                    <div class="icon">🔍</div>
+                    <div>Không tìm thấy ứng dụng nào</div>
+                    <div style="font-size: 12px; margin-top: 4px;">Cần có class .app-row trong #${type}-list</div>
+                </div>
+            `;
+            addLog(`⚠️ Không tìm thấy app nào trong ${typeName}`, 'warning');
+            return;
+        }
+        
+        // Update select options (vẫn giữ select để tương thích)
+        appListSelect.innerHTML = '';
+        currentAppList.forEach((app, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = `${app.title} - ${app.sub}`;
+            appListSelect.appendChild(option);
+        });
+        appListSelect.disabled = false;
+        
+        addLog(`✅ Đã tải ${currentAppList.length} ứng dụng ${typeName}`, 'success');
+        
+        // Auto select first app
+        if (currentAppList.length > 0) {
+            selectedApp = currentAppList[0];
+            renderAppList();
+            updateSelectedPreview();
             updateAppLinkBtn.disabled = false;
-            
-            addLog(`📱 Đã chọn: ${selectedApp.title} - ${selectedApp.sub}`, 'success');
-            if (selectedApp.plistUrl) {
-                addLog(`🔗 Link hiện tại: ${selectedApp.plistUrl}`, 'info');
-            }
         }
+        
+        setStatus(`Đã tải ${currentAppList.length} app ${typeName}`, 'success');
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="app-empty">
+                <div class="icon">❌</div>
+                <div>Lỗi tải danh sách</div>
+                <div style="font-size: 12px; margin-top: 4px; color: #f85149;">${error.message}</div>
+            </div>
+        `;
+        addLog(`❌ Lỗi tải danh sách: ${error.message}`, 'error');
+        setStatus('Lỗi tải danh sách', 'error');
+    }
+}
 
+// ===== Select app from list =====
+function selectApp(index) {
+    if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
+        selectedApp = currentAppList[index];
+        renderAppList();
+        updateSelectedPreview();
+        updateAppLinkBtn.disabled = false;
+        
+        // Cập nhật select để đồng bộ
+        if (appListSelect) {
+            appListSelect.selectedIndex = index;
+        }
+        
+        addLog(`📱 Đã chọn: ${selectedApp.title} - ${selectedApp.sub}`, 'success');
+        if (selectedApp.plistUrl) {
+            addLog(`🔗 Link hiện tại: ${selectedApp.plistUrl}`, 'info');
+        }
+    } else {
+        selectedApp = null;
+        renderAppList();
+        updateSelectedPreview();
+        updateAppLinkBtn.disabled = true;
+    }
+}
+
+// ===== Update selected preview =====
+function updateSelectedPreview() {
+    const preview = document.getElementById('selectedAppPreview');
+    const nameEl = document.getElementById('selectedAppName');
+    const subEl = document.getElementById('selectedAppSub');
+    const linkEl = document.getElementById('selectedAppLink');
+    
+    if (selectedApp) {
+        nameEl.textContent = selectedApp.title;
+        subEl.textContent = selectedApp.sub;
+        linkEl.textContent = selectedApp.plistUrl || 'Chưa có link';
+        preview.style.display = 'block';
+        updateAppLinkBtn.disabled = false;
+    } else {
+        preview.style.display = 'none';
+        updateAppLinkBtn.disabled = true;
+    }
+}
+window.selectApp = function(index) {
+    if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
+        selectedApp = currentAppList[index];
+        renderAppList();
+        updateSelectedPreview();
+        
+        // Cập nhật select để đồng bộ
+        if (appListSelect) {
+            appListSelect.selectedIndex = index;
+        }
+        
+        addLog(`📱 Đã chọn: ${selectedApp.title} - ${selectedApp.sub}`, 'success');
+        if (selectedApp.plistUrl) {
+            addLog(`🔗 Link hiện tại: ${selectedApp.plistUrl}`, 'info');
+        }
+    }
+};
         // ===== Update app link on index page =====
         async function updateSelectedAppLink() {
             if (!selectedApp) {
