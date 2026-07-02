@@ -19,11 +19,11 @@
                 <key>bundle-identifier</key>
                 <string>com.esign.khoindvn</string>
                 <key>bundle-version</key>
-                <string>1.0.0</string>
+                <string>1.0</string>
                 <key>kind</key>
                 <string>software</string>
                 <key>title</key>
-                <string>software-package</string>
+                <string>ESign</string>
             </dict>
         </dict>
     </array>
