@@ -1450,7 +1450,7 @@ window.selectAndUpdateApp = function(index) {
         var newLink = resultLink.value;
         if (newLink && newLink.indexOf('itms-services://') !== -1) {
             addLog('🔄 Tự động cập nhật link cho "' + selectedApp.title + '"...', 'info');
-            ();
+            updateSelectedAppLink();
         } else {
             addLog('💡 Chưa có link mới. Hãy mirror IPA trước.', 'warning');
         }
