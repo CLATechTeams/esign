@@ -1580,7 +1580,7 @@ window.selectAppForLink = function(index) {
         });
 
         // ===== CẬP NHẬT TẤT CẢ APP ĐÃ GÁN LINK =====
-        updateAllBtn.addEventListener('click', async function() {
+    updateAllBtn.addEventListener('click', async function() {
     if (isUpdating) {
         addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
         return;
@@ -1605,10 +1605,6 @@ window.selectAppForLink = function(index) {
 
     addLog('🚀 Bắt đầu cập nhật ' + count + ' app với link riêng...', 'info');
 
-    // ---- helpers: pure string surgery, no DOM re-serialization ----
-
-    // Tìm vùng [start,end] của phần tử có id = targetId trong chuỗi HTML gốc,
-    // đếm độ sâu thẻ để tìm đúng thẻ đóng tương ứng (không dùng regex "tham lam").
     function extractElementRangeById(html, targetId) {
         var openTagRe = new RegExp('<([a-zA-Z0-9]+)([^>]*\\bid=["\']' + targetId + '["\'][^>]*)>');
         var m = openTagRe.exec(html);
@@ -1631,31 +1627,7 @@ window.selectAppForLink = function(index) {
             }
         }
         if (contentEnd === -1) return null;
-
-        var fullEnd = contentEnd + ('</' + tagName + '>').length;
-        return { openTagStart: m.index, contentStart: contentStart, contentEnd: contentEnd, fullEnd: fullEnd };
-    }
-
-    // Tìm vị trí chính xác (offset) của giá trị href trong từng thẻ <a class="app-row" ...>,
-    // theo đúng thứ tự xuất hiện (khớp với querySelectorAll('.app-row')).
-    function findAppRowHrefRanges(html) {
-        var ranges = [];
-        var tagRe = /<a\b[^>]*>/gi;
-        var m;
-        while ((m = tagRe.exec(html)) !== null) {
-            var tag = m[0];
-            if (!/\bclass\s*=\s*(["'])[^"']*\bapp-row\b[^"']*\1/i.test(tag)) continue;
-
-            var hrefMatch = /\bhref\s*=\s*(["'])([\s\S]*?)\1/i.exec(tag);
-            if (!hrefMatch) continue;
-
-            var quotePos = tag.indexOf(hrefMatch[1], hrefMatch.index + hrefMatch[0].indexOf('=') );
-            var valueStart = m.index + hrefMatch.index + hrefMatch[0].indexOf(hrefMatch[2]);
-            var valueEnd = valueStart + hrefMatch[2].length;
-
-            ranges.push({ start: valueStart, end: valueEnd, oldValue: hrefMatch[2] });
-        }
-        return ranges;
+        return { contentStart: contentStart, contentEnd: contentEnd };
     }
 
     try {
@@ -1669,58 +1641,62 @@ window.selectAppForLink = function(index) {
 
         var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
 
-        // Chỉ dùng DOM để xác định số lượng app-row (không dùng để ghi lại file)
+        // Dùng DOM chỉ để log số lượng app-row (không dùng để ghi lại file)
         var parser = new DOMParser();
         var doc = parser.parseFromString(content, 'text/html');
         var container = doc.getElementById(targetId);
         if (!container) {
             throw new Error('Không tìm thấy container #' + targetId + ' trong file HTML');
         }
-        var appRowEls = container.querySelectorAll('.app-row');
-        addLog('🔍 Tìm thấy ' + appRowEls.length + ' app-row trong #' + targetId, 'info');
+        var appRowCountDom = container.querySelectorAll('.app-row').length;
+        addLog('🔍 Tìm thấy ' + appRowCountDom + ' app-row trong #' + targetId, 'info');
 
-        // Xác định vùng container trong CHUỖI GỐC (không phải DOM đã parse lại)
+        // Xác định vùng container trong CHUỖI GỐC
         var elRange = extractElementRangeById(content, targetId);
         if (!elRange) {
             throw new Error('Không xác định được vị trí #' + targetId + ' trong chuỗi HTML gốc');
         }
         var containerHtml = content.slice(elRange.contentStart, elRange.contentEnd);
-        var hrefRanges = findAppRowHrefRanges(containerHtml);
-
-        if (hrefRanges.length !== appRowEls.length) {
-            addLog('⚠️ Cảnh báo: số app-row DOM (' + appRowEls.length + ') khác số tìm được bằng chuỗi (' + hrefRanges.length + '), tiếp tục thận trọng', 'warning');
-        }
 
         var updatedCount = 0;
-        var keys = Object.keys(assignedApps);
-        var edits = []; // { start, end, newValue } tính theo offset trong containerHtml
+        var appIndex = -1;
+        var skippedIndexes = [];
 
-        for (var i = 0; i < keys.length; i++) {
-            var index = parseInt(keys[i]);
-            var item = assignedApps[index];
-            if (!item) continue;
-
-            try {
-                if (index < 0 || index >= hrefRanges.length) {
-                    addLog('⚠️ Không tìm thấy app "' + item.app.title + '" (index ' + index + ') trong HTML, bỏ qua', 'warning');
-                    continue;
-                }
-
-                var range = hrefRanges[index];
-
-                if (range.oldValue === item.newLink) {
-                    addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
-                    continue;
-                }
-
-                edits.push({ start: range.start, end: range.end, newValue: item.newLink });
-                item.app.plistUrl = item.newLink;
-                updatedCount++;
-                addLog('✅ Đã cập nhật link cho "' + item.app.title + '" (index ' + index + ')', 'success');
-            } catch (itemError) {
-                addLog('⚠️ Lỗi khi xử lý app "' + item.app.title + '": ' + itemError.message + ' — bỏ qua, tiếp tục app khác', 'warning');
-                continue;
+        // Thay href trực tiếp trong từng thẻ <a> khớp được, không tính offset bằng tay
+        var newContainerHtml = containerHtml.replace(/<a\b([^>]*)>/gi, function(fullTag, attrs) {
+            if (!/\bclass\s*=\s*(["'])[^"']*\bapp-row\b[^"']*\1/i.test(attrs)) {
+                return fullTag; // không phải app-row, giữ nguyên
             }
+
+            appIndex++;
+            var item = assignedApps[appIndex];
+            if (!item) return fullTag; // app này không được gán link mới
+
+            var hrefRe = /\bhref\s*=\s*(["'])([\s\S]*?)\1/i;
+            var hrefMatch = hrefRe.exec(attrs);
+            if (!hrefMatch) {
+                addLog('⚠️ Không tìm thấy href trong thẻ app-row (index ' + appIndex + '), bỏ qua', 'warning');
+                return fullTag;
+            }
+
+            if (hrefMatch[2] === item.newLink) {
+                addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
+                return fullTag;
+            }
+
+            var newAttrs = attrs.slice(0, hrefMatch.index) +
+                'href="' + item.newLink + '"' +
+                attrs.slice(hrefMatch.index + hrefMatch[0].length);
+
+            item.app.plistUrl = item.newLink;
+            updatedCount++;
+            addLog('✅ Đã cập nhật link cho "' + item.app.title + '" (index ' + appIndex + ')', 'success');
+
+            return '<a' + newAttrs + '>';
+        });
+
+        if (appIndex + 1 !== appRowCountDom) {
+            addLog('⚠️ Cảnh báo: số app-row khớp regex (' + (appIndex + 1) + ') khác số đếm bằng DOM (' + appRowCountDom + ')', 'warning');
         }
 
         if (updatedCount === 0) {
@@ -1733,18 +1709,10 @@ window.selectAppForLink = function(index) {
             return;
         }
 
-        // Áp dụng các thay đổi vào containerHtml, đi từ cuối lên đầu để offset không bị lệch
-        edits.sort(function(a, b) { return b.start - a.start; });
-        for (var e = 0; e < edits.length; e++) {
-            var ed = edits[e];
-            containerHtml = containerHtml.slice(0, ed.start) + ed.newValue + containerHtml.slice(ed.end);
-        }
-
-        // Ghép lại vào đúng vị trí trong chuỗi HTML gốc — mọi phần khác giữ nguyên 100%,
-        // không có DOCTYPE/html/head/body bị thêm vào, không có ký tự nào bị encode lại.
+        // Ghép lại vào đúng vị trí trong chuỗi HTML gốc — phần còn lại giữ nguyên 100%
         var newContent =
             content.slice(0, elRange.contentStart) +
-            containerHtml +
+            newContainerHtml +
             content.slice(elRange.contentEnd);
 
         function utf8ToBase64(str) {
@@ -1794,70 +1762,6 @@ window.selectAppForLink = function(index) {
         updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
     }
 });
-
-        // ============================================================
-        // LOAD APPS FROM INDEX PAGE
-        // ============================================================
-        async function loadAppsFromIndexPage(type) {
-            var token = getToken();
-            if (!token) {
-                addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
-                return;
-            }
-            var repoInfo = getRepoInfo();
-            if (!repoInfo) {
-                addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
-                return;
-            }
-
-            currentAppType = type;
-            var typeName = type === 'esign' ? 'ESign' : 'KSign';
-
-            if (appListContainer) {
-                appListContainer.innerHTML = '<div class="app-loading"><div class="spinner"></div><div style="margin-top: 10px;">Đang tải danh sách ' + typeName + '...</div></div>';
-            }
-            addLog('📥 Đang tải danh sách ' + typeName + ' từ trang index...', 'info');
-
-            try {
-                var indexPath = indexPagePath.value.trim() || 'index.html';
-                var content;
-                try {
-                    var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
-                    content = atob(result.content);
-                    addLog('✅ Đã tải file ' + indexPath + ' từ GitHub', 'success');
-                } catch (error) {
-                    if (error.isFileNotFound || error.status === 404) {
-                        if (appListContainer) {
-                            appListContainer.innerHTML = '<div class="app-empty"><div class="icon">📄</div><div>File ' + indexPath + ' chưa tồn tại</div><div style="font-size: 12px; margin-top: 4px;">Hãy upload file index.html lên GitHub</div></div>';
-                        }
-                        addLog('⚠️ File ' + indexPath + ' chưa tồn tại trên GitHub', 'warning');
-                        return;
-                    }
-                    throw error;
-                }
-
-                currentAppList = parseAppListFromHTML(content, type);
-
-                if (currentAppList.length === 0) {
-                    if (appListContainer) {
-                        appListContainer.innerHTML = '<div class="app-empty"><div class="icon">🔍</div><div>Không tìm thấy ứng dụng nào</div><div style="font-size: 12px; margin-top: 4px;">Cần có class .app-row trong #' + type + '-list</div></div>';
-                    }
-                    addLog('⚠️ Không tìm thấy app nào trong ' + typeName, 'warning');
-                    return;
-                }
-
-                addLog('✅ Đã tải ' + currentAppList.length + ' ứng dụng ' + typeName, 'success');
-                renderAppList();
-                setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
-            } catch (error) {
-                if (appListContainer) {
-                    appListContainer.innerHTML = '<div class="app-empty"><div class="icon">❌</div><div>Lỗi tải danh sách</div><div style="font-size: 12px; margin-top: 4px; color: #f85149;">' + error.message + '</div></div>';
-                }
-                addLog('❌ Lỗi tải danh sách: ' + error.message, 'error');
-                setStatus('Lỗi tải danh sách', 'error');
-            }
-        }
-
         // ============================================================
         // EVENT LISTENERS
         // ============================================================
