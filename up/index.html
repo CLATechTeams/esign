@@ -719,63 +719,63 @@
         // ============================================================
         // STATE
         // ============================================================
-        let plistData = null;
-        let ipaFile = null;
-        let isProcessing = false;
-        let processedCount = parseInt(localStorage.getItem('mirror_processed') || '0');
-        let totalSize = parseInt(localStorage.getItem('mirror_total_size') || '0');
-        let currentAppList = [];
-        let selectedApp = null;
-        let currentAppType = 'esign';
+        var plistData = null;
+        var ipaFile = null;
+        var isProcessing = false;
+        var processedCount = parseInt(localStorage.getItem('mirror_processed') || '0');
+        var totalSize = parseInt(localStorage.getItem('mirror_total_size') || '0');
+        var currentAppList = [];
+        var selectedApp = null;
+        var currentAppType = 'esign';
 
         // ============================================================
         // DOM ELEMENTS
         // ============================================================
-        const plistUrl = document.getElementById('plistUrl');
-        const fetchBtn = document.getElementById('fetchBtn');
-        const mirrorBtn = document.getElementById('mirrorBtn');
-        const githubToken = document.getElementById('githubToken');
-        const repoOwner = document.getElementById('repoOwner');
-        const repoName = document.getElementById('repoName');
-        const repoBranch = document.getElementById('repoBranch');
-        const commitMsg = document.getElementById('commitMsg');
-        const autoUpdate = document.getElementById('autoUpdate');
-        const progressContainer = document.getElementById('progressContainer');
-        const progressFill = document.getElementById('progressFill');
-        const progressText = document.getElementById('progressText');
-        const progressPercent = document.getElementById('progressPercent');
-        const logContainer = document.getElementById('logContainer');
-        const statusBadge = document.getElementById('statusBadge');
-        const processedCountEl = document.getElementById('processedCount');
-        const totalSizeEl = document.getElementById('totalSize');
-        const lastUpdateEl = document.getElementById('lastUpdate');
-        const appPreview = document.getElementById('appPreview');
-        const previewTitle = document.getElementById('previewTitle');
-        const previewSub = document.getElementById('previewSub');
-        const previewBundleId = document.getElementById('previewBundleId');
-        const previewVersion = document.getElementById('previewVersion');
-        const previewIpaUrl = document.getElementById('previewIpaUrl');
-        const previewPlistId = document.getElementById('previewPlistId');
-        const resultBox = document.getElementById('resultBox');
-        const resultLink = document.getElementById('resultLink');
-        const copyBtn = document.getElementById('copyBtn');
-        const openBtn = document.getElementById('openBtn');
-        const indexPagePath = document.getElementById('indexPagePath');
-        const loadESignBtn = document.getElementById('loadESignBtn');
-        const loadKSignBtn = document.getElementById('loadKSignBtn');
-        const appListSelect = document.getElementById('appListSelect');
-        const updateAppLinkBtn = document.getElementById('updateAppLinkBtn');
-        const refreshAppListBtn = document.getElementById('refreshAppListBtn');
-        const selectedAppPreview = document.getElementById('selectedAppPreview');
-        const selectedAppName = document.getElementById('selectedAppName');
-        const selectedAppSub = document.getElementById('selectedAppSub');
-        const selectedAppLink = document.getElementById('selectedAppLink');
-        const appListContainer = document.getElementById('appListContainer');
+        var plistUrl = document.getElementById('plistUrl');
+        var fetchBtn = document.getElementById('fetchBtn');
+        var mirrorBtn = document.getElementById('mirrorBtn');
+        var githubToken = document.getElementById('githubToken');
+        var repoOwner = document.getElementById('repoOwner');
+        var repoName = document.getElementById('repoName');
+        var repoBranch = document.getElementById('repoBranch');
+        var commitMsg = document.getElementById('commitMsg');
+        var autoUpdate = document.getElementById('autoUpdate');
+        var progressContainer = document.getElementById('progressContainer');
+        var progressFill = document.getElementById('progressFill');
+        var progressText = document.getElementById('progressText');
+        var progressPercent = document.getElementById('progressPercent');
+        var logContainer = document.getElementById('logContainer');
+        var statusBadge = document.getElementById('statusBadge');
+        var processedCountEl = document.getElementById('processedCount');
+        var totalSizeEl = document.getElementById('totalSize');
+        var lastUpdateEl = document.getElementById('lastUpdate');
+        var appPreview = document.getElementById('appPreview');
+        var previewTitle = document.getElementById('previewTitle');
+        var previewSub = document.getElementById('previewSub');
+        var previewBundleId = document.getElementById('previewBundleId');
+        var previewVersion = document.getElementById('previewVersion');
+        var previewIpaUrl = document.getElementById('previewIpaUrl');
+        var previewPlistId = document.getElementById('previewPlistId');
+        var resultBox = document.getElementById('resultBox');
+        var resultLink = document.getElementById('resultLink');
+        var copyBtn = document.getElementById('copyBtn');
+        var openBtn = document.getElementById('openBtn');
+        var indexPagePath = document.getElementById('indexPagePath');
+        var loadESignBtn = document.getElementById('loadESignBtn');
+        var loadKSignBtn = document.getElementById('loadKSignBtn');
+        var appListSelect = document.getElementById('appListSelect');
+        var updateAppLinkBtn = document.getElementById('updateAppLinkBtn');
+        var refreshAppListBtn = document.getElementById('refreshAppListBtn');
+        var selectedAppPreview = document.getElementById('selectedAppPreview');
+        var selectedAppName = document.getElementById('selectedAppName');
+        var selectedAppSub = document.getElementById('selectedAppSub');
+        var selectedAppLink = document.getElementById('selectedAppLink');
+        var appListContainer = document.getElementById('appListContainer');
 
         // ============================================================
         // LOAD SAVED CONFIG
         // ============================================================
-        const savedConfig = JSON.parse(localStorage.getItem('mirror_config') || '{}');
+        var savedConfig = JSON.parse(localStorage.getItem('mirror_config') || '{}');
         if (savedConfig.token) githubToken.value = savedConfig.token;
         if (savedConfig.owner) repoOwner.value = savedConfig.owner;
         if (savedConfig.repo) repoName.value = savedConfig.repo;
@@ -796,7 +796,7 @@
         }
 
         function addLog(message, type) {
-            const entry = document.createElement('div');
+            var entry = document.createElement('div');
             entry.className = 'log-entry ' + (type || 'info');
             entry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
             logContainer.appendChild(entry);
@@ -811,7 +811,7 @@
         }
 
         function getToken() {
-            const token = githubToken.value.trim();
+            var token = githubToken.value.trim();
             if (!token) {
                 addLog('⚠️ Vui lòng nhập GitHub Token', 'warning');
                 return null;
@@ -820,9 +820,9 @@
         }
 
         function getRepoInfo() {
-            const owner = repoOwner.value.trim();
-            const repo = repoName.value.trim();
-            const branch = repoBranch.value.trim() || 'main';
+            var owner = repoOwner.value.trim();
+            var repo = repoName.value.trim();
+            var branch = repoBranch.value.trim() || 'main';
             if (!owner || !repo) {
                 addLog('⚠️ Vui lòng nhập đầy đủ GitHub Username và Repository Name', 'error');
                 return null;
@@ -833,38 +833,38 @@
                 repo: repo,
                 branch: branch
             }));
-            return { owner, repo, branch };
+            return { owner: owner, repo: repo, branch: branch };
         }
 
         // ============================================================
         // GITHUB API
         // ============================================================
         async function githubRequest(endpoint, method, data, token, repoInfo, silent) {
-            const info = repoInfo || getRepoInfo();
+            var info = repoInfo || getRepoInfo();
             if (!info) throw new Error('Invalid repository');
-            const url = 'https://api.github.com/repos/' + info.owner + '/' + info.repo + endpoint;
+            var url = 'https://api.github.com/repos/' + info.owner + '/' + info.repo + endpoint;
             if (!silent) addLog('🔍 API Request: ' + method + ' ' + url, 'info');
-            const headers = {
+            var headers = {
                 'Accept': 'application/vnd.github.v3+json',
                 'User-Agent': 'IPA-Mirror-Tool'
             };
             if (token) headers['Authorization'] = 'token ' + token;
-            const options = { method: method, headers: headers, timeout: 300000 };
+            var options = { method: method, headers: headers, timeout: 300000 };
             if (data) {
                 options.body = JSON.stringify(data);
                 headers['Content-Type'] = 'application/json';
             }
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(function() { controller.abort(); }, 300000);
-                const response = await fetch(url, { ...options, signal: controller.signal });
+                var controller = new AbortController();
+                var timeoutId = setTimeout(function() { controller.abort(); }, 300000);
+                var response = await fetch(url, Object.assign({}, options, { signal: controller.signal }));
                 clearTimeout(timeoutId);
                 if (!silent) addLog('📊 Response: ' + response.status + ' ' + response.statusText, 'info');
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    let errorMessage;
+                    var errorText = await response.text();
+                    var errorMessage;
                     try {
-                        const errorJson = JSON.parse(errorText);
+                        var errorJson = JSON.parse(errorText);
                         errorMessage = errorJson.message || 'HTTP ' + response.status;
                         if (errorJson.errors) {
                             errorMessage += ': ' + errorJson.errors.map(function(e) { return e.message; }).join(', ');
@@ -874,7 +874,7 @@
                     }
                     if (response.status === 404) {
                         if (method === 'GET' && endpoint.indexOf('/contents/') !== -1) {
-                            const error = new Error('File not found');
+                            var error = new Error('File not found');
                             error.status = 404;
                             error.isFileNotFound = true;
                             throw error;
@@ -896,8 +896,8 @@
         async function checkRepoAccess(token, repoInfo) {
             try {
                 addLog('🔍 Kiểm tra repository: ' + repoInfo.owner + '/' + repoInfo.repo, 'info');
-                const url = 'https://api.github.com/repos/' + repoInfo.owner + '/' + repoInfo.repo;
-                const response = await fetch(url, {
+                var url = 'https://api.github.com/repos/' + repoInfo.owner + '/' + repoInfo.repo;
+                var response = await fetch(url, {
                     headers: {
                         'Authorization': 'token ' + token,
                         'Accept': 'application/vnd.github.v3+json'
@@ -920,11 +920,11 @@
                     return false;
                 }
                 if (!response.ok) {
-                    const error = await response.json();
+                    var error = await response.json();
                     addLog('❌ Lỗi kiểm tra: ' + (error.message || response.status), 'error');
                     return false;
                 }
-                const repo = await response.json();
+                var repo = await response.json();
                 addLog('✅ Repository tồn tại: ' + repo.full_name, 'success');
                 addLog('📂 Private: ' + (repo.private ? 'Có' : 'Không'), 'info');
                 addLog('📁 Default branch: ' + repo.default_branch, 'info');
@@ -938,13 +938,13 @@
         async function createDirectory(path, token, repoInfo) {
             try {
                 addLog('📁 Đang tạo thư mục: ' + path, 'info');
-                const gitkeepContent = btoa('# This file keeps the directory');
-                const data = {
+                var gitkeepContent = btoa('# This file keeps the directory');
+                var data = {
                     message: 'Create directory ' + path,
                     content: gitkeepContent,
                     branch: repoInfo.branch || 'main'
                 };
-                const fullPath = path + '/.gitkeep';
+                var fullPath = path + '/.gitkeep';
                 try {
                     await githubRequest('/contents/' + fullPath, 'GET', null, token, repoInfo, true);
                     addLog('📁 Thư mục ' + path + ' đã tồn tại', 'info');
@@ -1279,13 +1279,21 @@
             var doc = parser.parseFromString(htmlContent, 'text/html');
             var container = null;
             var targetId = type === 'esign' ? 'esign-list' : 'ksign-list';
+            
+            // Tìm theo ID
             var idContainer = doc.getElementById(targetId);
             if (idContainer) {
                 container = idContainer;
                 addLog('✅ Tìm thấy container với ID: #' + targetId, 'success');
             }
+            
+            // Nếu không tìm thấy, thử selector khác
             if (!container) {
-                var selectors = ['#' + type + '-content .' + type + '-section', '.' + type + '-section', '#' + type + '-content .apps-wrap'];
+                var selectors = [
+                    '#' + type + '-content .' + type + '-section',
+                    '.' + type + '-section',
+                    '#' + type + '-content .apps-wrap'
+                ];
                 for (var s = 0; s < selectors.length; s++) {
                     var found = doc.querySelector(selectors[s]);
                     if (found && found.querySelectorAll('.app-row').length > 0) {
@@ -1295,6 +1303,8 @@
                     }
                 }
             }
+            
+            // Nếu vẫn chưa tìm thấy
             if (!container) {
                 var allRows = doc.querySelectorAll('.app-row');
                 if (allRows.length > 0) {
@@ -1305,8 +1315,10 @@
                     return [];
                 }
             }
+            
             var appRows = container.querySelectorAll('.app-row');
             addLog('📱 Tìm thấy ' + appRows.length + ' ứng dụng', 'info');
+            
             var apps = [];
             for (var i = 0; i < appRows.length; i++) {
                 var row = appRows[i];
@@ -1338,10 +1350,16 @@
         }
 
         function renderAppList() {
+            if (!appListContainer) {
+                console.error('appListContainer is null');
+                return;
+            }
+            
             if (!currentAppList || currentAppList.length === 0) {
                 appListContainer.innerHTML = '<div class="app-empty"><div class="icon">📭</div><div>Chưa có ứng dụng nào</div><div style="font-size: 12px; margin-top: 4px;">Hãy chọn ESign hoặc KSign để tải danh sách</div></div>';
                 return;
             }
+            
             var html = '';
             for (var i = 0; i < currentAppList.length; i++) {
                 var app = currentAppList[i];
@@ -1353,6 +1371,7 @@
                 html += '<div class="app-item ' + (isActive ? 'active' : '') + '" data-index="' + i + '" onclick="selectApp(' + i + ')">' + iconHtml + '<div class="app-info"><div class="app-title">' + app.title + '</div><div class="app-sub">' + app.sub + '</div></div><span class="app-status ' + statusClass + '">' + statusText + '</span><span class="app-index">#' + (i + 1) + '</span></div>';
             }
             appListContainer.innerHTML = html;
+            
             if (selectedApp) {
                 var activeItem = appListContainer.querySelector('.app-item.active');
                 if (activeItem) {
@@ -1398,10 +1417,15 @@
                 addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
                 return;
             }
+            
             currentAppType = type;
             var typeName = type === 'esign' ? 'ESign' : 'KSign';
-            appListContainer.innerHTML = '<div class="app-loading"><div class="spinner"></div><div style="margin-top: 10px;">Đang tải danh sách ' + typeName + '...</div></div>';
+            
+            if (appListContainer) {
+                appListContainer.innerHTML = '<div class="app-loading"><div class="spinner"></div><div style="margin-top: 10px;">Đang tải danh sách ' + typeName + '...</div></div>';
+            }
             addLog('📥 Đang tải danh sách ' + typeName + ' từ trang index...', 'info');
+            
             try {
                 var indexPath = indexPagePath.value.trim() || 'index.html';
                 var content;
@@ -1411,27 +1435,38 @@
                     addLog('✅ Đã tải file ' + indexPath + ' từ GitHub', 'success');
                 } catch (error) {
                     if (error.isFileNotFound || error.status === 404) {
-                        appListContainer.innerHTML = '<div class="app-empty"><div class="icon">📄</div><div>File ' + indexPath + ' chưa tồn tại</div><div style="font-size: 12px; margin-top: 4px;">Hãy upload file index.html lên GitHub</div></div>';
+                        if (appListContainer) {
+                            appListContainer.innerHTML = '<div class="app-empty"><div class="icon">📄</div><div>File ' + indexPath + ' chưa tồn tại</div><div style="font-size: 12px; margin-top: 4px;">Hãy upload file index.html lên GitHub</div></div>';
+                        }
                         addLog('⚠️ File ' + indexPath + ' chưa tồn tại trên GitHub', 'warning');
                         return;
                     }
                     throw error;
                 }
+                
                 currentAppList = parseAppListFromHTML(content, type);
+                
                 if (currentAppList.length === 0) {
-                    appListContainer.innerHTML = '<div class="app-empty"><div class="icon">🔍</div><div>Không tìm thấy ứng dụng nào</div><div style="font-size: 12px; margin-top: 4px;">Cần có class .app-row trong #' + type + '-list</div></div>';
+                    if (appListContainer) {
+                        appListContainer.innerHTML = '<div class="app-empty"><div class="icon">🔍</div><div>Không tìm thấy ứng dụng nào</div><div style="font-size: 12px; margin-top: 4px;">Cần có class .app-row trong #' + type + '-list</div></div>';
+                    }
                     addLog('⚠️ Không tìm thấy app nào trong ' + typeName, 'warning');
                     return;
                 }
-                appListSelect.innerHTML = '';
-                for (var i = 0; i < currentAppList.length; i++) {
-                    var option = document.createElement('option');
-                    option.value = i;
-                    option.textContent = currentAppList[i].title + ' - ' + currentAppList[i].sub;
-                    appListSelect.appendChild(option);
+                
+                if (appListSelect) {
+                    appListSelect.innerHTML = '';
+                    for (var i = 0; i < currentAppList.length; i++) {
+                        var option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = currentAppList[i].title + ' - ' + currentAppList[i].sub;
+                        appListSelect.appendChild(option);
+                    }
+                    appListSelect.disabled = false;
                 }
-                appListSelect.disabled = false;
+                
                 addLog('✅ Đã tải ' + currentAppList.length + ' ứng dụng ' + typeName, 'success');
+                
                 if (currentAppList.length > 0) {
                     selectedApp = currentAppList[0];
                     renderAppList();
@@ -1439,7 +1474,9 @@
                 }
                 setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
             } catch (error) {
-                appListContainer.innerHTML = '<div class="app-empty"><div class="icon">❌</div><div>Lỗi tải danh sách</div><div style="font-size: 12px; margin-top: 4px; color: #f85149;">' + error.message + '</div></div>';
+                if (appListContainer) {
+                    appListContainer.innerHTML = '<div class="app-empty"><div class="icon">❌</div><div>Lỗi tải danh sách</div><div style="font-size: 12px; margin-top: 4px; color: #f85149;">' + error.message + '</div></div>';
+                }
                 addLog('❌ Lỗi tải danh sách: ' + error.message, 'error');
                 setStatus('Lỗi tải danh sách', 'error');
             }
@@ -1460,8 +1497,10 @@
             if (!token) return;
             var repoInfo = getRepoInfo();
             if (!repoInfo) return;
+            
             addLog('🔄 Đang cập nhật link cho ' + selectedApp.title + ' trên trang index...', 'info');
             addLog('📄 File: ' + indexPagePath.value, 'info');
+            
             try {
                 var indexPath = indexPagePath.value.trim() || 'index.html';
                 var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
