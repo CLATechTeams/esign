@@ -1296,10 +1296,16 @@ function parsePlist(xmlText) {
                     setStatus('Thành công ✅', 'success');
                     addLog('📱 Chọn app và gán link mới để cập nhật', 'info');
 
-                    setTimeout(function() {
+                   setTimeout(function() {
                         if (getToken() && getRepoInfo()) {
-                            addLog('📱 Đang tải danh sách app từ trang index...', 'info');
-                            loadAppsFromIndexPage('esign');
+                            if (currentAppList && currentAppList.length > 0) {
+                                addLog('📱 Danh sách app đã có sẵn (' + currentAppList.length + ' app), không tải lại', 'info');
+                                addLog('👉 Hãy click app để gán link vừa tạo: ' + itmsLink, 'info');
+                                renderAppList(); // chỉ render lại UI, không fetch lại từ GitHub
+                            } else {
+                                addLog('📱 Đang tải danh sách app từ trang index...', 'info');
+                                loadAppsFromIndexPage('esign');
+                            }
                         }
                     }, 1500);
                     navigator.clipboard.writeText(itmsLink).then(function() {
@@ -1516,13 +1522,41 @@ window.selectAppForLink = function(index) {
                 var html = '';
                 var keys = Object.keys(assignedApps);
                 for (var i = 0; i < keys.length; i++) {
-                    var key = keys[i];
-                    var item = assignedApps[key];
-                    if (item) {
-                        html += '<div class="assigned-item">'
-                            + '<span class="assigned-app-name">📱 ' + item.app.title + '</span>'
-                            + '<span class="assigned-app-link">' + item.newLink.split('/').pop() + '</span>'
-                            + '</div>';
+                    var index = parseInt(keys[i]);
+                    var item = assignedApps[index];
+                    if (!item) continue;
+                
+                    try {
+                        var appRegex = /<a[^>]*class="app-row"[^>]*>/g;
+                        var matches = [];
+                        var match;
+                        while ((match = appRegex.exec(newContainer)) !== null) {
+                            matches.push({ fullTag: match[0], index: match.index });
+                        }
+                
+                        if (index >= matches.length) {
+                            addLog('⚠️ Không tìm thấy app "' + item.app.title + '" trong HTML, bỏ qua', 'warning');
+                            continue;
+                        }
+                
+                        var appData = matches[index];
+                        var oldLinkMatch = appData.fullTag.match(/href="([^"]*)"/);
+                        var oldLink = oldLinkMatch ? oldLinkMatch[1] : null;
+                
+                        if (oldLink === item.newLink) {
+                            addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
+                            continue;
+                        }
+                
+                        var newAppTag = appData.fullTag.replace(/href="[^"]*"/, 'href="' + item.newLink + '"');
+                        newContainer = newContainer.replace(appData.fullTag, newAppTag);
+                
+                        item.app.plistUrl = item.newLink;
+                        updatedCount++;
+                        addLog('✅ Đã cập nhật link cho "' + item.app.title + '"', 'success');
+                    } catch (itemError) {
+                        addLog('⚠️ Lỗi khi xử lý app "' + item.app.title + '": ' + itemError.message + ' — bỏ qua, tiếp tục app khác', 'warning');
+                        continue;
                     }
                 }
                 selectedAppsList.innerHTML = html;
