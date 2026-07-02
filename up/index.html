@@ -1446,14 +1446,7 @@
                 addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
                 if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
                 
-                // Kiểm tra có link mới không và tự động cập nhật
-                var newLink = resultLink.value;
-                if (newLink && newLink.indexOf('itms-services://') !== -1) {
-                    addLog('🔄 Tự động cập nhật link cho "' + selectedApp.title + '"...', 'info');
-                    updateSelectedAppLink();
-                } else {
-                    addLog('💡 Chưa có link mới. Hãy mirror IPA trước.', 'warning');
-                }
+                
             }
         };
 
@@ -1523,12 +1516,7 @@
                     renderAppList();
                     updateSelectedPreview();
                     
-                    // Tự động cập nhật app đầu tiên nếu có link mới
-                    var newLink = resultLink.value;
-                    if (newLink && newLink.indexOf('itms-services://') !== -1) {
-                        addLog('🔄 Tự động cập nhật app đầu tiên: ' + selectedApp.title, 'info');
-                        updateSelectedAppLink();
-                    }
+                   
                 }
                 setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
             } catch (error) {
