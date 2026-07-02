@@ -1,0 +1,18 @@
+{
+  "name": "ipa-auto-mirror",
+  "version": "1.0.0",
+  "description": "Auto mirror IPA from plist to GitHub - preserve all original metadata",
+  "main": "scripts/mirror.js",
+  "scripts": {
+    "mirror": "node scripts/mirror.js",
+    "start": "npx serve .",
+    "test": "node scripts/mirror.js https://website.khoindvn.io.vn/plists/fwcreuimtmig.plist your_token"
+  },
+  "keywords": ["ipa", "plist", "mirror", "github"],
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "serve": "^14.0.1"
+  }
+}
