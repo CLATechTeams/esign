@@ -1614,55 +1614,52 @@ window.selectAppForLink = function(index) {
                 var content = atob(result.content);
                 addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
 
-                var updatedCount = 0;
                 var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
 
-                var containerRegex = new RegExp('<div[^>]*id="' + targetId + '"[^>]*>(.*?)</div>', 's');
-                var containerMatch = content.match(containerRegex);
+                // Parse toàn bộ HTML bằng DOM thay vì regex trên chuỗi
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(content, 'text/html');
+                var container = doc.getElementById(targetId);
 
-                if (!containerMatch) {
-                    throw new Error('Không tìm thấy container #' + targetId);
+                if (!container) {
+                    throw new Error('Không tìm thấy container #' + targetId + ' trong file HTML');
                 }
 
-                var fullContainer = containerMatch[0];
-                var newContainer = fullContainer;
+                var appRowEls = container.querySelectorAll('.app-row');
+                addLog('🔍 Tìm thấy ' + appRowEls.length + ' app-row trong #' + targetId, 'info');
 
+                var updatedCount = 0;
                 var keys = Object.keys(assignedApps);
+
                 for (var i = 0; i < keys.length; i++) {
                     var index = parseInt(keys[i]);
                     var item = assignedApps[index];
                     if (!item) continue;
 
-                    var appRegex = /<a[^>]*class="app-row"[^>]*>/g;
-                    var matches = [];
-                    var match;
-                    while ((match = appRegex.exec(newContainer)) !== null) {
-                        matches.push({
-                            fullTag: match[0],
-                            index: match.index
-                        });
-                    }
+                    try {
+                        if (index < 0 || index >= appRowEls.length) {
+                            addLog('⚠️ Không tìm thấy app "' + item.app.title + '" (index ' + index + ') trong HTML, bỏ qua', 'warning');
+                            continue;
+                        }
 
-                    if (index >= matches.length) {
-                        addLog('⚠️ Không tìm thấy app "' + item.app.title + '" trong HTML', 'warning');
+                        var rowEl = appRowEls[index];
+                        var oldLink = rowEl.getAttribute('href');
+
+                        if (oldLink === item.newLink) {
+                            addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
+                            continue;
+                        }
+
+                        // Set trực tiếp trên element DOM, không phụ thuộc offset chuỗi
+                        rowEl.setAttribute('href', item.newLink);
+
+                        item.app.plistUrl = item.newLink;
+                        updatedCount++;
+                        addLog('✅ Đã cập nhật link cho "' + item.app.title + '" (index ' + index + ')', 'success');
+                    } catch (itemError) {
+                        addLog('⚠️ Lỗi khi xử lý app "' + item.app.title + '": ' + itemError.message + ' — bỏ qua, tiếp tục app khác', 'warning');
                         continue;
                     }
-
-                    var appData = matches[index];
-                    var oldLinkMatch = appData.fullTag.match(/href="([^"]*)"/);
-                    var oldLink = oldLinkMatch ? oldLinkMatch[1] : null;
-
-                    if (oldLink === item.newLink) {
-                        addLog('⏭️ App "' + item.app.title + '" đã có link mới, bỏ qua', 'info');
-                        continue;
-                    }
-
-                    var newAppTag = appData.fullTag.replace(/href="[^"]*"/, 'href="' + item.newLink + '"');
-                    newContainer = newContainer.replace(appData.fullTag, newAppTag);
-
-                    item.app.plistUrl = item.newLink;
-                    updatedCount++;
-                    addLog('✅ Đã cập nhật link cho "' + item.app.title + '"', 'success');
                 }
 
                 if (updatedCount === 0) {
@@ -1671,10 +1668,12 @@ window.selectAppForLink = function(index) {
                     updateAllBtn.disabled = false;
                     assignedStatus.textContent = '⏭️ Không cần cập nhật';
                     assignedStatus.style.color = '#d29922';
+                    updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
                     return;
                 }
 
-                var newContent = content.replace(fullContainer, newContainer);
+                // Serialize lại toàn bộ document thành HTML string
+                var newContent = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
 
                 function utf8ToBase64(str) {
                     var bytes = new TextEncoder().encode(str);
@@ -1709,7 +1708,7 @@ window.selectAppForLink = function(index) {
                 renderAppList();
                 setStatus('Đã cập nhật ' + updatedCount + ' app ✅', 'success');
 
-                // Cập nhật lại danh sách từ GitHub
+                // Cập nhật lại danh sách từ GitHub (để lấy đúng href mới nhất)
                 await loadAppsFromIndexPage(currentAppType);
 
             } catch (error) {
