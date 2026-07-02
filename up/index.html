@@ -450,23 +450,39 @@
             </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
+    <label for="indexPagePath">📄 Đường dẫn trang index chính</label>
+    <input type="text" id="indexPagePath" value="index.html" placeholder="index.html" style="font-family: monospace;">
+    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+        File HTML chứa danh sách app trên GitHub (mặc định: index.html)
+    </div>
+</div>
+
+<div class="form-group" hidden>
+    <label for="indexPageUrl">🔗 URL trang index chính</label>
+    <input type="text" id="indexPageUrl" value="https://clatechteams.github.io/esign/" placeholder="https://username.github.io/repo/" style="font-family: monospace;" readonly>
+    <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+        Trang này sẽ được cập nhật link sau khi mirror
+    </div>
+</div>
+        
+        <div class="form-group" hidden>
             <label for="repoOwner">👤 GitHub Username</label>
             <input type="text" id="repoOwner" value="clatechteams" placeholder="username" style="font-family: monospace;">
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="repoName">📂 Repository Name</label>
             <input type="text" id="repoName" value="esign" placeholder="repository-name" style="font-family: monospace;">
            
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="repoBranch">🌿 Branch</label>
             <input type="text" id="repoBranch" value="main" style="font-family: monospace;">
         </div>
 
-        <div class="form-group">
+        <div class="form-group" hidden>
             <label for="commitMsg">📝 Commit Message (tùy chọn)</label>
             <input type="text" id="commitMsg" placeholder="Mirror IPA from plist">
         </div>
@@ -1376,6 +1392,376 @@ document.getElementById('testConnectionBtn').addEventListener('click', async () 
         setStatus('Kết nối thất bại', 'error');
     }
 });
+
+
+        // ===== DOM Elements for Index Page =====
+const indexPagePath = document.getElementById('indexPagePath');
+const indexPageUrl = document.getElementById('indexPageUrl');
+
+// ===== Load apps from index page =====
+async function loadAppsFromIndexPage(type) {
+    const token = getToken();
+    if (!token) return;
+    
+    const repoInfo = getRepoInfo();
+    if (!repoInfo) return;
+    
+    currentAppType = type;
+    const typeName = type === 'esign' ? 'ESign' : 'KSign';
+    
+    addLog(`📥 Đang tải danh sách ${typeName} từ trang index...`, 'info');
+    
+    try {
+        // Lấy file index.html từ GitHub
+        const indexPath = indexPagePath.value.trim() || 'index.html';
+        let content;
+        
+        try {
+            const result = await githubRequest(`/contents/${indexPath}`, 'GET', null, token, repoInfo, true);
+            content = atob(result.content);
+            addLog(`✅ Đã tải file ${indexPath} từ GitHub`, 'success');
+        } catch (error) {
+            if (error.isFileNotFound || error.status === 404) {
+                addLog(`⚠️ File ${indexPath} chưa tồn tại trên GitHub`, 'warning');
+                addLog(`💡 Hãy upload file index.html lên GitHub trước`, 'info');
+                addLog(`📁 Đường dẫn: ${repoInfo.owner}/${repoInfo.repo}/${indexPath}`, 'info');
+                return;
+            }
+            throw error;
+        }
+        
+        // Parse app list từ HTML
+        currentAppList = parseAppListFromHTML(content, type);
+        
+        if (currentAppList.length === 0) {
+            addLog(`⚠️ Không tìm thấy app nào trong ${typeName}`, 'warning');
+            addLog(`💡 Kiểm tra lại selector: #${type}-list hoặc .${type}-section`, 'info');
+            return;
+        }
+        
+        // Update select options
+        appListSelect.innerHTML = '';
+        currentAppList.forEach((app, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            const label = `${app.title} - ${app.sub}`;
+            option.textContent = label;
+            if (app.plistUrl) {
+                option.setAttribute('data-plist', app.plistUrl);
+            }
+            appListSelect.appendChild(option);
+        });
+        
+        // Enable select and buttons
+        appListSelect.disabled = false;
+        updateAppLinkBtn.disabled = true;
+        
+        addLog(`✅ Đã tải ${currentAppList.length} ứng dụng ${typeName} từ trang index`, 'success');
+        
+        // Auto select first app
+        if (currentAppList.length > 0) {
+            appListSelect.selectedIndex = 0;
+            selectApp(0);
+        }
+        
+    } catch (error) {
+        addLog(`❌ Lỗi tải danh sách: ${error.message}`, 'error');
+    }
+}
+
+// ===== Update app link on index page =====
+async function updateSelectedAppLink() {
+    if (!selectedApp) {
+        addLog('⚠️ Vui lòng chọn app trước', 'error');
+        return;
+    }
+    
+    const newLink = resultLink.value;
+    if (!newLink || !newLink.includes('itms-services://')) {
+        addLog('⚠️ Vui lòng mirror thành công trước để có link mới', 'error');
+        addLog('💡 Link hiện tại: ' + (resultLink.value || 'chưa có'), 'warning');
+        return;
+    }
+    
+    const token = getToken();
+    if (!token) return;
+    
+    const repoInfo = getRepoInfo();
+    if (!repoInfo) return;
+    
+    addLog(`🔄 Đang cập nhật link cho ${selectedApp.title} trên trang index...`, 'info');
+    addLog(`📄 File: ${indexPagePath.value}`, 'info');
+    
+    try {
+        // Lấy file index.html hiện tại
+        const indexPath = indexPagePath.value.trim() || 'index.html';
+        const result = await githubRequest(`/contents/${indexPath}`, 'GET', null, token, repoInfo, true);
+        const sha = result.sha;
+        let content = atob(result.content);
+        
+        // Parse và update HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+        
+        // Tìm container phù hợp
+        let container;
+        if (currentAppType === 'esign') {
+            container = doc.querySelector('#esign-list') || doc.querySelector('#esign-content .esign-section');
+        } else {
+            container = doc.querySelector('#ksign-list') || doc.querySelector('#ksign-content .ksign-section');
+        }
+        
+        if (!container) {
+            throw new Error(`Không tìm thấy container #${currentAppType}-list trong HTML`);
+        }
+        
+        const appRows = container.querySelectorAll('.app-row');
+        if (selectedApp.index >= appRows.length) {
+            throw new Error(`Không tìm thấy app index ${selectedApp.index} trong HTML`);
+        }
+        
+        const targetRow = appRows[selectedApp.index];
+        
+        // Lưu lại link cũ để log
+        const oldLink = targetRow.getAttribute('href');
+        addLog(`📝 Link cũ: ${oldLink || 'chưa có'}`, 'info');
+        
+        // Cập nhật href với link mới
+        targetRow.setAttribute('href', newLink);
+        addLog(`📝 Link mới: ${newLink}`, 'success');
+        
+        // Cập nhật lại HTML
+        const newHtml = `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
+        
+        // Upload lên GitHub
+        const base64Content = btoa(unescape(encodeURIComponent(newHtml)));
+        const updateData = {
+            message: `Update link for ${selectedApp.title} - ${new Date().toLocaleString()}`,
+            content: base64Content,
+            sha: sha,
+            branch: repoInfo.branch || 'main'
+        };
+        
+        await githubRequest(`/contents/${indexPath}`, 'PUT', updateData, token, repoInfo, true);
+        
+        addLog(`✅ Đã cập nhật link cho ${selectedApp.title}`, 'success');
+        addLog(`🔗 Xem tại: ${indexPageUrl.value || `https://${repoInfo.owner}.github.io/${repoInfo.repo}/`}`, 'link');
+        
+        // Cập nhật lại danh sách
+        await loadAppsFromIndexPage(currentAppType);
+        
+        // Show success
+        setStatus('Đã cập nhật app ✅', 'success');
+        
+    } catch (error) {
+        addLog(`❌ Lỗi cập nhật: ${error.message}`, 'error');
+        if (error.stack) {
+            addLog(`📚 ${error.stack.substring(0, 300)}...`, 'error');
+        }
+        setStatus('Cập nhật thất bại', 'error');
+    }
+}
+
+// ===== Parse app list from HTML =====
+function parseAppListFromHTML(htmlContent, type) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    
+    // Tìm container với ID hoặc class
+    let container;
+    if (type === 'esign') {
+        container = doc.querySelector('#esign-list') || doc.querySelector('#esign-content .esign-section') || doc.querySelector('.esign-section');
+    } else {
+        container = doc.querySelector('#ksign-list') || doc.querySelector('#ksign-content .ksign-section') || doc.querySelector('.ksign-section');
+    }
+    
+    if (!container) {
+        // Thử tìm tất cả .app-row
+        const allRows = doc.querySelectorAll('.app-row');
+        if (allRows.length > 0) {
+            // Ước tính container từ rows
+            container = allRows[0].parentElement;
+        } else {
+            return [];
+        }
+    }
+    
+    const appRows = container.querySelectorAll('.app-row');
+    const apps = [];
+    
+    appRows.forEach((row, index) => {
+        const img = row.querySelector('img');
+        const title = row.querySelector('.app-title');
+        const sub = row.querySelector('.app-sub');
+        const href = row.getAttribute('href');
+        
+        // Extract plist URL từ href
+        let plistUrl = null;
+        if (href && href.includes('itms-services://')) {
+            try {
+                const urlParams = new URLSearchParams(href.split('?')[1]);
+                plistUrl = urlParams.get('url');
+            } catch (e) {
+                // Bỏ qua lỗi parse
+            }
+        }
+        
+        apps.push({
+            index: index,
+            title: title ? title.textContent.trim() : 'Unknown',
+            sub: sub ? sub.textContent.trim() : '',
+            icon: img ? img.getAttribute('src') : '',
+            href: href || '',
+            plistUrl: plistUrl,
+            element: row.outerHTML,
+            type: type
+        });
+    });
+    
+    return apps;
+}
+
+        // ===== App List Management =====
+let currentAppList = [];
+let selectedApp = null;
+let currentAppType = 'esign'; // 'esign' hoặc 'ksign'
+
+// DOM elements for app list
+const loadESignBtn = document.getElementById('loadESignBtn');
+const loadKSignBtn = document.getElementById('loadKSignBtn');
+const appListSelect = document.getElementById('appListSelect');
+const updateAppLinkBtn = document.getElementById('updateAppLinkBtn');
+const refreshAppListBtn = document.getElementById('refreshAppListBtn');
+const selectedAppPreview = document.getElementById('selectedAppPreview');
+const selectedAppName = document.getElementById('selectedAppName');
+const selectedAppSub = document.getElementById('selectedAppSub');
+const selectedAppLink = document.getElementById('selectedAppLink');
+
+// ===== Select app from list =====
+function selectApp(index) {
+    if (index < 0 || index >= currentAppList.length) {
+        selectedApp = null;
+        selectedAppPreview.style.display = 'none';
+        updateAppLinkBtn.disabled = true;
+        return;
+    }
+    
+    selectedApp = currentAppList[index];
+    selectedAppName.textContent = selectedApp.title;
+    selectedAppSub.textContent = selectedApp.sub;
+    selectedAppLink.textContent = selectedApp.plistUrl || 'Chưa có link';
+    selectedAppPreview.style.display = 'block';
+    updateAppLinkBtn.disabled = false;
+    
+    addLog(`📱 Đã chọn: ${selectedApp.title} - ${selectedApp.sub}`, 'info');
+}
+
+// ===== Event Listeners for App List =====
+loadESignBtn.addEventListener('click', () => {
+    if (!getToken()) {
+        addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
+        return;
+    }
+    if (!getRepoInfo()) {
+        addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
+        return;
+    }
+    loadAppsFromIndexPage('esign');
+});
+
+loadKSignBtn.addEventListener('click', () => {
+    if (!getToken()) {
+        addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
+        return;
+    }
+    if (!getRepoInfo()) {
+        addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
+        return;
+    }
+    loadAppsFromIndexPage('ksign');
+});
+
+appListSelect.addEventListener('change', (e) => {
+    const index = parseInt(e.target.value);
+    if (!isNaN(index) && index >= 0 && index < currentAppList.length) {
+        selectApp(index);
+    }
+});
+
+updateAppLinkBtn.addEventListener('click', updateSelectedAppLink);
+
+refreshAppListBtn.addEventListener('click', () => {
+    if (currentAppType) {
+        loadAppsFromIndexPage(currentAppType);
+    } else {
+        addLog('⚠️ Vui lòng chọn loại app trước', 'warning');
+    }
+});
+
+// ===== Cập nhật URL hiển thị =====
+function updateIndexUrl() {
+    const owner = repoOwner.value.trim();
+    const repo = repoName.value.trim();
+    if (owner && repo) {
+        const url = `https://${owner}.github.io/${repo}/`;
+        if (indexPageUrl) {
+            indexPageUrl.value = url;
+        }
+    }
+}
+
+// Thêm event listener cho repo change
+repoOwner.addEventListener('change', updateIndexUrl);
+repoName.addEventListener('change', updateIndexUrl);
+repoOwner.addEventListener('input', updateIndexUrl);
+repoName.addEventListener('input', updateIndexUrl);
+
+// ===== Thêm nút test connection (nếu chưa có) =====
+// Tạo nút test connection nếu chưa tồn tại
+if (!document.getElementById('testConnectionBtn')) {
+    const testBtn = document.createElement('button');
+    testBtn.id = 'testConnectionBtn';
+    testBtn.className = 'btn btn-secondary';
+    testBtn.style.cssText = 'margin-top: 10px; width: 100%;';
+    testBtn.textContent = '🔌 Kiểm tra kết nối GitHub';
+    
+    // Chèn sau mirrorBtn
+    mirrorBtn.parentNode.insertBefore(testBtn, mirrorBtn.nextSibling);
+    
+    testBtn.addEventListener('click', async () => {
+        const token = getToken();
+        if (!token) return;
+        
+        const repoInfo = getRepoInfo();
+        if (!repoInfo) return;
+        
+        addLog(`🔍 Đang kiểm tra kết nối đến GitHub...`, 'info');
+        const connected = await checkRepoAccess(token, repoInfo);
+        
+        if (connected) {
+            addLog(`✅ Kết nối thành công!`, 'success');
+            setStatus('Kết nối OK', 'success');
+            
+            // Kiểm tra thêm thư mục
+            await ensureDirectories(token, repoInfo);
+        } else {
+            addLog(`❌ Kết nối thất bại. Kiểm tra lại token và repository.`, 'error');
+            setStatus('Kết nối thất bại', 'error');
+        }
+    });
+}
+
+// ===== Khởi tạo =====
+// Cập nhật URL ban đầu
+setTimeout(updateIndexUrl, 100);
+
+// Thêm hướng dẫn sử dụng vào log
+addLog('📖 Hướng dẫn sử dụng:', 'info');
+addLog('   1. Nhập URL plist → "Lấy thông tin"', 'info');
+addLog('   2. "Bắt đầu Mirror" → Tạo link ITMS mới', 'info');
+addLog('   3. Chọn ESign/KSign → Tải danh sách app', 'info');
+addLog('   4. Chọn app → "Cập nhật link"', 'info');
+addLog('   5. Kiểm tra tại trang index', 'info');
     </script>
 </body>
 </html>
