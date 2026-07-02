@@ -477,7 +477,9 @@
                 Tự động cập nhật plist với link IPA mới
             </label>
         </div>
-
+<button class="btn btn-secondary" id="testConnectionBtn" style="margin-top: 10px; width: 100%;">
+    🔌 Kiểm tra kết nối GitHub
+</button>
         <button class="btn btn-full" id="mirrorBtn" disabled>
             🚀 Bắt đầu Mirror
         </button>
@@ -620,6 +622,10 @@
     if (!info) throw new Error('Invalid repository');
     
     const url = `https://api.github.com/repos/${info.owner}/${info.repo}${endpoint}`;
+    
+    // Log để debug
+    addLog(`🔍 API Request: ${method} ${url}`, 'info');
+    
     const headers = {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'IPA-Mirror-Tool'
@@ -632,7 +638,7 @@
     const options = { 
         method, 
         headers,
-        timeout: 300000 // 5 phút timeout cho file lớn
+        timeout: 300000
     };
 
     if (data) {
@@ -651,15 +657,37 @@
         
         clearTimeout(timeoutId);
         
+        // Log response status
+        addLog(`📊 Response: ${response.status} ${response.statusText}`, 'info');
+        
         if (!response.ok) {
             const errorText = await response.text();
             let errorMessage;
             try {
                 const errorJson = JSON.parse(errorText);
                 errorMessage = errorJson.message || `HTTP ${response.status}`;
+                // Log chi tiết lỗi
+                if (errorJson.errors) {
+                    errorMessage += `: ${errorJson.errors.map(e => e.message).join(', ')}`;
+                }
             } catch {
                 errorMessage = `HTTP ${response.status}: ${errorText.substring(0, 200)}`;
             }
+            
+            // Xử lý các lỗi cụ thể
+            if (response.status === 404) {
+                throw new Error(`Repository không tồn tại hoặc bạn không có quyền truy cập. Kiểm tra lại username/repo và token.`);
+            }
+            if (response.status === 401) {
+                throw new Error(`Token không hợp lệ hoặc đã hết hạn. Vui lòng tạo token mới.`);
+            }
+            if (response.status === 403) {
+                throw new Error(`Không đủ quyền. Token cần có quyền 'repo'.`);
+            }
+            if (response.status === 422) {
+                throw new Error(`Dữ liệu không hợp lệ: ${errorMessage}`);
+            }
+            
             throw new Error(errorMessage);
         }
 
@@ -671,7 +699,109 @@
         throw error;
     }
 }
+// ===== Kiểm tra repository =====
+async function checkRepoAccess(token, repoInfo) {
+    try {
+        addLog(`🔍 Kiểm tra repository: ${repoInfo.owner}/${repoInfo.repo}`, 'info');
+        
+        const url = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        });
+        
+        if (response.status === 404) {
+            addLog(`❌ Repository không tồn tại: ${repoInfo.owner}/${repoInfo.repo}`, 'error');
+            addLog(`💡 Hãy tạo repository trước hoặc kiểm tra lại tên`, 'warning');
+            addLog(`📝 Tạo repository mới tại: https://github.com/new`, 'info');
+            return false;
+        }
+        
+        if (response.status === 401) {
+            addLog(`❌ Token không hợp lệ hoặc đã hết hạn`, 'error');
+            addLog(`💡 Tạo token mới tại: Settings → Developer settings → Personal access tokens`, 'info');
+            return false;
+        }
+        
+        if (response.status === 403) {
+            addLog(`❌ Token không có quyền 'repo'`, 'error');
+            addLog(`💡 Khi tạo token, nhớ chọn scope 'repo' (full control)`, 'info');
+            return false;
+        }
+        
+        if (!response.ok) {
+            const error = await response.json();
+            addLog(`❌ Lỗi kiểm tra: ${error.message || response.status}`, 'error');
+            return false;
+        }
+        
+        const repo = await response.json();
+        addLog(`✅ Repository tồn tại: ${repo.full_name}`, 'success');
+        addLog(`📂 Private: ${repo.private ? 'Có' : 'Không'}`, 'info');
+        addLog(`📁 Default branch: ${repo.default_branch}`, 'info');
+        
+        return true;
+    } catch (error) {
+        addLog(`❌ Lỗi kiểm tra repository: ${error.message}`, 'error');
+        return false;
+    }
+}
 
+// ===== Tạo thư mục trên GitHub (bằng cách upload file .gitkeep) =====
+async function createDirectory(path, token, repoInfo) {
+    try {
+        addLog(`📁 Đang tạo thư mục: ${path}`, 'info');
+        
+        // Tạo file .gitkeep trong thư mục
+        const gitkeepContent = btoa('# This file keeps the directory');
+        const data = {
+            message: `Create directory ${path}`,
+            content: gitkeepContent,
+            branch: repoInfo.branch || 'main'
+        };
+
+        const fullPath = `${path}/.gitkeep`;
+        
+        // Kiểm tra xem thư mục đã tồn tại chưa
+        try {
+            await githubRequest(`/contents/${fullPath}`, 'GET', null, token, repoInfo);
+            addLog(`📁 Thư mục ${path} đã tồn tại`, 'info');
+            return true;
+        } catch (error) {
+            if (error.message.includes('404') || error.message.includes('Not Found')) {
+                // Tạo thư mục mới
+                const result = await githubRequest(`/contents/${fullPath}`, 'PUT', data, token, repoInfo);
+                addLog(`✅ Đã tạo thư mục: ${path}`, 'success');
+                return true;
+            }
+            throw error;
+        }
+    } catch (error) {
+        addLog(`⚠️ Không thể tạo thư mục ${path}: ${error.message}`, 'warning');
+        // Không throw error vì upload vẫn có thể hoạt động
+        return false;
+    }
+}
+
+// ===== Kiểm tra và tạo cấu trúc thư mục =====
+async function ensureDirectories(token, repoInfo) {
+    const directories = ['uploads', 'plists'];
+    let allCreated = true;
+    
+    for (const dir of directories) {
+        try {
+            const created = await createDirectory(dir, token, repoInfo);
+            if (!created) allCreated = false;
+        } catch (error) {
+            addLog(`⚠️ Lỗi tạo thư mục ${dir}: ${error.message}`, 'warning');
+            allCreated = false;
+        }
+    }
+    
+    return allCreated;
+}
         async function uploadToGitHub(file, path, token, repoInfo, message = null) {
     try {
         addLog(`📤 Đang mã hóa file ${file.name}...`, 'info');
@@ -977,7 +1107,7 @@ async function uploadLargeFile(base64Content, path, token, repoInfo, data) {
         }
 
         // ===== Main Mirror Process =====
-       async function startMirror() {
+      async function startMirror() {
     if (isProcessing) return;
     if (!plistData) {
         addLog('⚠️ Vui lòng tải plist trước', 'error');
@@ -1000,14 +1130,31 @@ async function uploadLargeFile(base64Content, path, token, repoInfo, data) {
     setStatus('Đang xử lý...', 'processing');
 
     try {
+        // ===== KIỂM TRA REPOSITORY TRƯỚC KHI BẮT ĐẦU =====
+        addLog('🔍 Kiểm tra kết nối GitHub...', 'info');
+        const repoExists = await checkRepoAccess(token, repoInfo);
+        if (!repoExists) {
+            addLog('❌ Không thể truy cập repository. Vui lòng kiểm tra:', 'error');
+            addLog(`   - Username: ${repoInfo.owner}`, 'error');
+            addLog(`   - Repository: ${repoInfo.repo}`, 'error');
+            addLog(`   - Token: có quyền 'repo' không?`, 'error');
+            addLog(`   - Repository đã được tạo chưa?`, 'error');
+            addLog(`💡 Nếu chưa có repository, tạo tại: https://github.com/new`, 'info');
+            throw new Error('Repository không tồn tại hoặc không thể truy cập');
+        }
+        
+        // ===== TẠO THƯ MỤC NẾU CHƯA CÓ =====
+        addLog('📁 Kiểm tra cấu trúc thư mục...', 'info');
+        await ensureDirectories(token, repoInfo);
+        
         // Step 1: Download IPA
+        addLog('📥 Bắt đầu tải IPA...', 'info');
         const ipaFile = await downloadIPA(plistData.ipaUrl);
         
         // Step 2: Upload IPA to GitHub
         updateProgress(60, 'Đang upload IPA lên GitHub...');
         addLog(`📤 Đang upload ${ipaFile.name} lên GitHub...`, 'info');
         
-        // Kiểm tra kích thước file
         const fileSizeMB = ipaFile.size / 1024 / 1024;
         if (fileSizeMB > 95) {
             addLog(`⚠️ File ${fileSizeMB.toFixed(1)} MB > 95 MB, GitHub có thể từ chối`, 'warning');
@@ -1155,6 +1302,30 @@ async function uploadLargeFile(base64Content, path, token, repoInfo, data) {
             plistUrl.value = urlParam;
             setTimeout(() => fetchBtn.click(), 500);
         }
+
+
+        // Thêm sau các event listener khác
+document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+    const token = getToken();
+    if (!token) return;
+    
+    const repoInfo = getRepoInfo();
+    if (!repoInfo) return;
+    
+    addLog(`🔍 Đang kiểm tra kết nối đến GitHub...`, 'info');
+    const connected = await checkRepoAccess(token, repoInfo);
+    
+    if (connected) {
+        addLog(`✅ Kết nối thành công!`, 'success');
+        setStatus('Kết nối OK', 'success');
+        
+        // Kiểm tra thêm thư mục
+        await ensureDirectories(token, repoInfo);
+    } else {
+        addLog(`❌ Kết nối thất bại. Kiểm tra lại token và repository.`, 'error');
+        setStatus('Kết nối thất bại', 'error');
+    }
+});
     </script>
 </body>
 </html>
