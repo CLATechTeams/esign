@@ -8,8 +8,8 @@ const execPromise = util.promisify(exec);
 // ===== CONFIGURATION =====
 // ĐỔI THÔNG TIN NÀY THÀNH GITHUB CỦA BẠN
 const CONFIG = {
-    repoOwner: 'YOUR_USERNAME',        // 👈 Thay bằng username GitHub của bạn
-    repoName: 'YOUR_REPO_NAME',        // 👈 Thay bằng tên repository
+    repoOwner: 'clatechteams',        // 👈 Thay bằng username GitHub của bạn
+    repoName: 'esign',        // 👈 Thay bằng tên repository
     branch: 'main',
     plistDir: path.join(__dirname, '../plists'),
     uploadDir: path.join(__dirname, '../uploads')
