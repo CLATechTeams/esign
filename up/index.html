@@ -617,14 +617,15 @@
         }
 
         // ===== GitHub API =====
-      async function githubRequest(endpoint, method = 'GET', data = null, token = null, repoInfo = null) {
+     async function githubRequest(endpoint, method = 'GET', data = null, token = null, repoInfo = null, silent = false) {
     const info = repoInfo || getRepoInfo();
     if (!info) throw new Error('Invalid repository');
     
     const url = `https://api.github.com/repos/${info.owner}/${info.repo}${endpoint}`;
     
-    // Log để debug
-    addLog(`🔍 API Request: ${method} ${url}`, 'info');
+    if (!silent) {
+        addLog(`🔍 API Request: ${method} ${url}`, 'info');
+    }
     
     const headers = {
         'Accept': 'application/vnd.github.v3+json',
@@ -657,8 +658,9 @@
         
         clearTimeout(timeoutId);
         
-        // Log response status
-        addLog(`📊 Response: ${response.status} ${response.statusText}`, 'info');
+        if (!silent) {
+            addLog(`📊 Response: ${response.status} ${response.statusText}`, 'info');
+        }
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -666,7 +668,6 @@
             try {
                 const errorJson = JSON.parse(errorText);
                 errorMessage = errorJson.message || `HTTP ${response.status}`;
-                // Log chi tiết lỗi
                 if (errorJson.errors) {
                     errorMessage += `: ${errorJson.errors.map(e => e.message).join(', ')}`;
                 }
@@ -674,8 +675,15 @@
                 errorMessage = `HTTP ${response.status}: ${errorText.substring(0, 200)}`;
             }
             
-            // Xử lý các lỗi cụ thể
+            // Xử lý lỗi 404 - có thể là file chưa tồn tại, không phải lỗi
             if (response.status === 404) {
+                // Nếu là GET và endpoint chứa /contents/, đây là file chưa tồn tại
+                if (method === 'GET' && endpoint.includes('/contents/')) {
+                    const error = new Error('File not found');
+                    error.status = 404;
+                    error.isFileNotFound = true;
+                    throw error;
+                }
                 throw new Error(`Repository không tồn tại hoặc bạn không có quyền truy cập. Kiểm tra lại username/repo và token.`);
             }
             if (response.status === 401) {
@@ -754,7 +762,6 @@ async function createDirectory(path, token, repoInfo) {
     try {
         addLog(`📁 Đang tạo thư mục: ${path}`, 'info');
         
-        // Tạo file .gitkeep trong thư mục
         const gitkeepContent = btoa('# This file keeps the directory');
         const data = {
             message: `Create directory ${path}`,
@@ -764,27 +771,31 @@ async function createDirectory(path, token, repoInfo) {
 
         const fullPath = `${path}/.gitkeep`;
         
-        // Kiểm tra xem thư mục đã tồn tại chưa
+        // Kiểm tra xem file đã tồn tại chưa
         try {
-            await githubRequest(`/contents/${fullPath}`, 'GET', null, token, repoInfo);
+            await githubRequest(`/contents/${fullPath}`, 'GET', null, token, repoInfo, true);
             addLog(`📁 Thư mục ${path} đã tồn tại`, 'info');
             return true;
         } catch (error) {
-            if (error.message.includes('404') || error.message.includes('Not Found')) {
-                // Tạo thư mục mới
-                const result = await githubRequest(`/contents/${fullPath}`, 'PUT', data, token, repoInfo);
-                addLog(`✅ Đã tạo thư mục: ${path}`, 'success');
-                return true;
+            // Nếu là lỗi file not found, tạo mới
+            if (error.isFileNotFound || error.status === 404) {
+                addLog(`📝 Thư mục ${path} chưa tồn tại, đang tạo...`, 'info');
+                try {
+                    const result = await githubRequest(`/contents/${fullPath}`, 'PUT', data, token, repoInfo, true);
+                    addLog(`✅ Đã tạo thư mục: ${path}`, 'success');
+                    return true;
+                } catch (uploadError) {
+                    addLog(`⚠️ Lỗi tạo thư mục ${path}: ${uploadError.message}`, 'warning');
+                    return false;
+                }
             }
             throw error;
         }
     } catch (error) {
-        addLog(`⚠️ Không thể tạo thư mục ${path}: ${error.message}`, 'warning');
-        // Không throw error vì upload vẫn có thể hoạt động
+        addLog(`⚠️ Lỗi tạo thư mục ${path}: ${error.message}`, 'warning');
         return false;
     }
 }
-
 // ===== Kiểm tra và tạo cấu trúc thư mục =====
 async function ensureDirectories(token, repoInfo) {
     const directories = ['uploads', 'plists'];
@@ -800,16 +811,19 @@ async function ensureDirectories(token, repoInfo) {
         }
     }
     
+    if (allCreated) {
+        addLog(`✅ Cấu trúc thư mục đã sẵn sàng`, 'success');
+    } else {
+        addLog(`⚠️ Một số thư mục chưa được tạo, nhưng vẫn có thể upload được`, 'warning');
+    }
+    
     return allCreated;
 }
-        async function uploadToGitHub(file, path, token, repoInfo, message = null) {
+     async function uploadToGitHub(file, path, token, repoInfo, message = null) {
     try {
         addLog(`📤 Đang mã hóa file ${file.name}...`, 'info');
         
-        // Đọc file dưới dạng ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
-        
-        // Chuyển đổi ArrayBuffer sang Base64 một cách an toàn
         const base64Content = arrayBufferToBase64(arrayBuffer);
         
         addLog(`✅ Mã hóa thành công (${(base64Content.length / 1024 / 1024).toFixed(2)} MB)`, 'info');
@@ -817,32 +831,27 @@ async function ensureDirectories(token, repoInfo) {
         const data = {
             message: message || `Upload ${file.name}`,
             content: base64Content,
-            branch: repoInfo.branch
+            branch: repoInfo.branch || 'main'
         };
 
         // Kiểm tra file đã tồn tại chưa
+        let fileExists = false;
         try {
-            const existing = await githubRequest(`/contents/${path}`, 'GET', null, token, repoInfo);
+            const existing = await githubRequest(`/contents/${path}`, 'GET', null, token, repoInfo, true);
             if (existing && existing.sha) {
                 data.sha = existing.sha;
+                fileExists = true;
                 addLog(`📝 File đã tồn tại, sẽ cập nhật`, 'info');
             }
         } catch (error) {
-            // File không tồn tại, tiếp tục
-            if (error.message.includes('404')) {
+            if (error.isFileNotFound || error.status === 404) {
                 addLog(`📝 File mới, sẽ tạo mới`, 'info');
             } else {
                 throw error;
             }
         }
 
-        // Upload với chunk nếu file lớn
-        if (base64Content.length > 100 * 1024 * 1024) { // > 100MB
-            addLog(`⚠️ File lớn, đang upload từng phần...`, 'warning');
-            return await uploadLargeFile(base64Content, path, token, repoInfo, data);
-        }
-
-        const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo);
+        const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo, true);
         addLog(`✅ Upload thành công`, 'success');
         return result.content.download_url;
         
