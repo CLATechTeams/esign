@@ -1450,7 +1450,7 @@ window.selectAndUpdateApp = function(index) {
         var newLink = resultLink.value;
         if (newLink && newLink.indexOf('itms-services://') !== -1) {
             addLog('🔄 Tự động cập nhật link cho "' + selectedApp.title + '"...', 'info');
-            updateSelectedAppLink();
+            ();
         } else {
             addLog('💡 Chưa có link mới. Hãy mirror IPA trước.', 'warning');
         }
@@ -1572,48 +1572,30 @@ async function updateSelectedAppLink() {
         var content = atob(result.content);
         addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
 
-        // ===== DÙNG REGEX ĐỂ TÌM VÀ THAY THẾ =====
+        // ===== GIỮ NGUYÊN NỘI DUNG, DÙNG REGEX ĐỂ THAY THẾ =====
         var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
-        var containerStart = '<div class="' + currentAppType + '-section" id="' + targetId + '">';
-        var containerEnd = '</div>';
-
-        var startIndex = content.indexOf(containerStart);
-        if (startIndex === -1) {
-            // Thử tìm cách khác
-            var altStart = '<div id="' + targetId + '" class="' + currentAppType + '-section">';
-            startIndex = content.indexOf(altStart);
-            if (startIndex === -1) {
-                // Tìm bất kỳ container nào có id
-                var idPattern = new RegExp('<div[^>]*id="' + targetId + '"[^>]*>', 'i');
-                var idMatch = content.match(idPattern);
-                if (idMatch) {
-                    startIndex = content.indexOf(idMatch[0]);
-                    containerStart = idMatch[0];
-                }
-            } else {
-                containerStart = altStart;
-            }
-        }
         
-        if (startIndex === -1) {
+        // Tìm container bằng regex linh hoạt hơn
+        var containerRegex = new RegExp('<div[^>]*id="' + targetId + '"[^>]*>(.*?)</div>', 's');
+        var containerMatch = content.match(containerRegex);
+        
+        if (!containerMatch) {
             throw new Error('Không tìm thấy container #' + targetId);
         }
+        
+        var fullContainer = containerMatch[0];
+        var containerContent = containerMatch[1];
+        addLog('📦 Tìm thấy container, độ dài: ' + fullContainer.length + ' ký tự', 'info');
 
-        var endIndex = content.indexOf(containerEnd, startIndex + containerStart.length);
-        if (endIndex === -1) {
-            throw new Error('Không tìm thấy đóng container #' + targetId);
-        }
-        endIndex += containerEnd.length;
-
-        var containerContent = content.substring(startIndex, endIndex);
-        addLog('📦 Tìm thấy container, độ dài: ' + containerContent.length + ' ký tự', 'info');
-
-        // Tìm tất cả app-row
+        // Tìm tất cả app-row trong container
         var appRegex = /<a[^>]*class="app-row"[^>]*>/g;
         var appMatches = [];
         var match;
-        while ((match = appRegex.exec(containerContent)) !== null) {
-            appMatches.push(match);
+        while ((match = appRegex.exec(fullContainer)) !== null) {
+            appMatches.push({
+                fullTag: match[0],
+                index: match.index
+            });
         }
         
         addLog('📱 Tìm thấy ' + appMatches.length + ' app trong container', 'info');
@@ -1622,11 +1604,8 @@ async function updateSelectedAppLink() {
             throw new Error('Không tìm thấy app index ' + selectedApp.index + ' (có ' + appMatches.length + ' app)');
         }
 
-        var appTag = appMatches[selectedApp.index][0];
-        addLog('🎯 Tìm thấy app tag: ' + appTag.substring(0, 100) + '...', 'info');
-
-        // Lấy link cũ từ tag
-        var oldLinkMatch = appTag.match(/href="([^"]*)"/);
+        var appData = appMatches[selectedApp.index];
+        var oldLinkMatch = appData.fullTag.match(/href="([^"]*)"/);
         var oldLink = oldLinkMatch ? oldLinkMatch[1] : null;
         addLog('📝 Link cũ: ' + (oldLink || 'chưa có'), 'info');
 
@@ -1641,15 +1620,15 @@ async function updateSelectedAppLink() {
         }
 
         // Tạo tag mới với link mới
-        var newAppTag = appTag.replace(/href="[^"]*"/, 'href="' + newLink + '"');
-        addLog('📝 Tag mới: ' + newAppTag.substring(0, 100) + '...', 'info');
-
-        // Thay thế trong container content
-        var newContainerContent = containerContent.replace(appTag, newAppTag);
-
-        // Tạo HTML mới
-        var newContent = content.substring(0, startIndex) + newContainerContent + content.substring(endIndex);
-        addLog('📄 HTML mới dài: ' + newContent.length + ' ký tự', 'info');
+        var newAppTag = appData.fullTag.replace(/href="[^"]*"/, 'href="' + newLink + '"');
+        
+        // Thay thế trong container
+        var newContainer = fullContainer.replace(appData.fullTag, newAppTag);
+        
+        // Thay thế container cũ bằng container mới trong toàn bộ content
+        var newContent = content.replace(fullContainer, newContainer);
+        
+        addLog('📝 Đã thay thế link thành công', 'success');
 
         // ===== MÃ HÓA UTF-8 ĐÚNG CÁCH =====
         function utf8ToBase64(str) {
