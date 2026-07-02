@@ -1,0 +1,68 @@
+name: Mirror IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      plist_url:
+        description: 'URL của plist cần mirror'
+        required: true
+        type: string
+      repo_owner:
+        description: 'GitHub Username (bỏ trống để dùng mặc định)'
+        required: false
+        type: string
+        default: ''
+      repo_name:
+        description: 'Repository Name (bỏ trống để dùng mặc định)'
+        required: false
+        type: string
+        default: ''
+      commit_message:
+        description: 'Commit message'
+        required: false
+        type: string
+        default: 'Mirror IPA from plist'
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: npm install
+    
+    - name: Create directories
+      run: |
+        mkdir -p uploads
+        mkdir -p plists
+    
+    - name: Run mirror script
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PLIST_URL: ${{ github.event.inputs.plist_url }}
+        REPO_OWNER: ${{ github.event.inputs.repo_owner || 'YOUR_USERNAME' }}
+        REPO_NAME: ${{ github.event.inputs.repo_name || 'YOUR_REPO_NAME' }}
+      run: |
+        if [ -n "$REPO_OWNER" ] && [ -n "$REPO_NAME" ]; then
+          node scripts/mirror.js "$PLIST_URL" "$GITHUB_TOKEN" "$REPO_OWNER" "$REPO_NAME"
+        else
+          node scripts/mirror.js "$PLIST_URL" "$GITHUB_TOKEN"
+        fi
+    
+    - name: Commit and push changes
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add uploads/ plists/
+        git diff --staged --quiet || git commit -m "${{ github.event.inputs.commit_message || 'Mirror IPA from plist' }}"
+        git push
