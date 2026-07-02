@@ -1065,67 +1065,63 @@
         // ============================================================
         // PARSE PLIST
         // ============================================================
-        function parsePlist(xmlText) {
-            var parser = new DOMParser();
-            var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            var strings = xmlDoc.getElementsByTagName('string');
-            var ipaUrl = null,
-                appName = null,
-                bundleId = null,
-                bundleVersion = null;
-            var allStrings = [];
-            for (var i = 0; i < strings.length; i++) {
-                allStrings.push(strings[i].textContent);
-            }
-            var bundleIdIndex = allStrings.findIndex(function(s) { return s.indexOf('bundle-identifier') !== -1; });
-            if (bundleIdIndex !== -1 && bundleIdIndex + 1 < allStrings.length) {
-                bundleId = allStrings[bundleIdIndex + 1];
-            }
-            var versionIndex = allStrings.findIndex(function(s) { return s.indexOf('bundle-version') !== -1; });
-            if (versionIndex !== -1 && versionIndex + 1 < allStrings.length) {
-                bundleVersion = allStrings[versionIndex + 1];
-            }
-            var titleIndex = allStrings.findIndex(function(s) { return s.indexOf('title') !== -1; });
-            if (titleIndex !== -1 && titleIndex + 1 < allStrings.length) {
-                appName = allStrings[titleIndex + 1];
-            }
-            for (var j = 0; j < allStrings.length; j++) {
-                var str = allStrings[j];
-                if (str.indexOf('http') === 0 && (str.indexOf('.ipa') !== -1 || str.indexOf('/ipa/') !== -1)) {
-                    ipaUrl = str;
-                    break;
-                }
-            }
-            if (!ipaUrl) {
-                var dicts = xmlDoc.getElementsByTagName('dict');
-                for (var k = 0; k < dicts.length; k++) {
-                    var children = dicts[k].children;
-                    for (var m = 0; m < children.length; m++) {
-                        if (children[m].tagName === 'key' && children[m].textContent === 'url') {
-                            if (m + 1 < children.length && children[m + 1].tagName === 'string') {
-                                var url = children[m + 1].textContent;
-                                if (url.indexOf('http') === 0) {
-                                    ipaUrl = url;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (ipaUrl) break;
-                }
-            }
-            var appSub = 'Unknown';
-            var urlMatch = ipaUrl ? ipaUrl.match(/\/\/([^\/]+)/) : null;
-            if (urlMatch) appSub = urlMatch[1];
-            return {
-                ipaUrl: ipaUrl,
-                appName: appName || 'ESign',
-                bundleId: bundleId || 'com.esign.app',
-                bundleVersion: bundleVersion || '1.0.0',
-                appSub: appSub,
-                rawContent: xmlText
-            };
+       function parsePlist(xmlText) {
+    var parser = new DOMParser();
+    var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    
+    // Lấy tất cả string elements
+    var strings = xmlDoc.getElementsByTagName('string');
+    var allStrings = [];
+    for (var i = 0; i < strings.length; i++) {
+        allStrings.push(strings[i].textContent);
+    }
+    
+    // Tìm IPA URL
+    var ipaUrl = null;
+    for (var j = 0; j < allStrings.length; j++) {
+        var str = allStrings[j];
+        if (str.indexOf('http') === 0 && (str.indexOf('.ipa') !== -1 || str.indexOf('/ipa/') !== -1)) {
+            ipaUrl = str;
+            break;
         }
+    }
+    
+    // Tìm bundle-identifier
+    var bundleId = null;
+    for (var k = 0; k < allStrings.length; k++) {
+        if (allStrings[k] === 'bundle-identifier' && k + 1 < allStrings.length) {
+            bundleId = allStrings[k + 1];
+            break;
+        }
+    }
+    
+    // Tìm bundle-version
+    var bundleVersion = null;
+    for (var l = 0; l < allStrings.length; l++) {
+        if (allStrings[l] === 'bundle-version' && l + 1 < allStrings.length) {
+            bundleVersion = allStrings[l + 1];
+            break;
+        }
+    }
+    
+    // Tìm title
+    var appName = null;
+    for (var m = 0; m < allStrings.length; m++) {
+        if (allStrings[m] === 'title' && m + 1 < allStrings.length) {
+            appName = allStrings[m + 1];
+            break;
+        }
+    }
+    
+    
+    return {
+        ipaUrl: ipaUrl,
+        appName: appName,
+        bundleId: bundleId,
+        bundleVersion: bundleVersion,
+        rawContent: xmlText
+    };
+}
 
         // ============================================================
         // FETCH PLIST
