@@ -1580,7 +1580,7 @@ window.selectAppForLink = function(index) {
         });
 
         // ===== CẬP NHẬT TẤT CẢ APP ĐÃ GÁN LINK =====
-    updateAllBtn.addEventListener('click', async function() {
+       updateAllBtn.addEventListener('click', async function() {
     if (isUpdating) {
         addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
         return;
@@ -1605,6 +1605,8 @@ window.selectAppForLink = function(index) {
 
     addLog('🚀 Bắt đầu cập nhật ' + count + ' app với link riêng...', 'info');
 
+    // Tìm vùng [contentStart, contentEnd] của phần tử có id = targetId trong chuỗi HTML gốc,
+    // đếm độ sâu thẻ để khớp đúng thẻ đóng tương ứng.
     function extractElementRangeById(html, targetId) {
         var openTagRe = new RegExp('<([a-zA-Z0-9]+)([^>]*\\bid=["\']' + targetId + '["\'][^>]*)>');
         var m = openTagRe.exec(html);
@@ -1762,6 +1764,70 @@ window.selectAppForLink = function(index) {
         updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
     }
 });
+
+        // ============================================================
+        // LOAD APPS FROM INDEX PAGE
+        // ============================================================
+        async function loadAppsFromIndexPage(type) {
+            var token = getToken();
+            if (!token) {
+                addLog('⚠️ Vui lòng nhập GitHub Token trước', 'warning');
+                return;
+            }
+            var repoInfo = getRepoInfo();
+            if (!repoInfo) {
+                addLog('⚠️ Vui lòng nhập thông tin repository', 'warning');
+                return;
+            }
+
+            currentAppType = type;
+            var typeName = type === 'esign' ? 'ESign' : 'KSign';
+
+            if (appListContainer) {
+                appListContainer.innerHTML = '<div class="app-loading"><div class="spinner"></div><div style="margin-top: 10px;">Đang tải danh sách ' + typeName + '...</div></div>';
+            }
+            addLog('📥 Đang tải danh sách ' + typeName + ' từ trang index...', 'info');
+
+            try {
+                var indexPath = indexPagePath.value.trim() || 'index.html';
+                var content;
+                try {
+                    var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
+                    content = atob(result.content);
+                    addLog('✅ Đã tải file ' + indexPath + ' từ GitHub', 'success');
+                } catch (error) {
+                    if (error.isFileNotFound || error.status === 404) {
+                        if (appListContainer) {
+                            appListContainer.innerHTML = '<div class="app-empty"><div class="icon">📄</div><div>File ' + indexPath + ' chưa tồn tại</div><div style="font-size: 12px; margin-top: 4px;">Hãy upload file index.html lên GitHub</div></div>';
+                        }
+                        addLog('⚠️ File ' + indexPath + ' chưa tồn tại trên GitHub', 'warning');
+                        return;
+                    }
+                    throw error;
+                }
+
+                currentAppList = parseAppListFromHTML(content, type);
+
+                if (currentAppList.length === 0) {
+                    if (appListContainer) {
+                        appListContainer.innerHTML = '<div class="app-empty"><div class="icon">🔍</div><div>Không tìm thấy ứng dụng nào</div><div style="font-size: 12px; margin-top: 4px;">Cần có class .app-row trong #' + type + '-list</div></div>';
+                    }
+                    addLog('⚠️ Không tìm thấy app nào trong ' + typeName, 'warning');
+                    return;
+                }
+
+                addLog('✅ Đã tải ' + currentAppList.length + ' ứng dụng ' + typeName, 'success');
+                renderAppList();
+                setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
+            } catch (error) {
+                if (appListContainer) {
+                    appListContainer.innerHTML = '<div class="app-empty"><div class="icon">❌</div><div>Lỗi tải danh sách</div><div style="font-size: 12px; margin-top: 4px; color: #f85149;">' + error.message + '</div></div>';
+                }
+                addLog('❌ Lỗi tải danh sách: ' + error.message, 'error');
+                setStatus('Lỗi tải danh sách', 'error');
+            }
+        }
+
         // ============================================================
         // EVENT LISTENERS
         // ============================================================
