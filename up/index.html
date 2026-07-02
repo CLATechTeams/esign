@@ -1200,6 +1200,7 @@
             resultBox.style.display = 'none';
             setStatus('Đang xử lý...', 'processing');
 
+            checkUpdateButtonStatus();
             try {
                 addLog('🔍 Kiểm tra kết nối GitHub...', 'info');
                 var repoExists = await checkRepoAccess(token, repoInfo);
@@ -1400,6 +1401,7 @@
                 selectedApp = currentAppList[index];
                 renderAppList();
                 updateSelectedPreview();
+                checkUpdateButtonStatus();
                 if (appListSelect) appListSelect.selectedIndex = index;
                 addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
                 if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
@@ -1482,7 +1484,7 @@
             }
         }
 
-       async function updateSelectedAppLink() {
+    async function updateSelectedAppLink() {
     // Kiểm tra đã chọn app chưa
     if (!selectedApp) {
         addLog('⚠️ Vui lòng chọn app trước', 'error');
@@ -1491,7 +1493,7 @@
     
     // Kiểm tra đã có link mới chưa (từ mirror)
     var newLink = resultLink.value;
-    addLog('🔍 Link hiện tại trong ô kết quả: ' + (newLink || 'trống'), 'info');
+    addLog('🔍 Link mới sẽ được cập nhật: ' + (newLink || 'trống'), 'info');
     
     if (!newLink || newLink.indexOf('itms-services://') === -1) {
         addLog('⚠️ Chưa có link ITMS mới. Vui lòng mirror thành công trước!', 'error');
@@ -1578,7 +1580,7 @@
         await loadAppsFromIndexPage(currentAppType);
         setStatus('Đã cập nhật app ✅', 'success');
         
-        // Hiển thị thông báo thành công trong result box
+        // Hiển thị thông báo thành công
         var successMsg = document.createElement('div');
         successMsg.style.cssText = 'margin-top: 10px; padding: 10px; background: #1c2333; border-radius: 6px; border-left: 3px solid #238636;';
         successMsg.innerHTML = '✅ Đã cập nhật link cho <strong>' + selectedApp.title + '</strong><br>🔗 <a href="' + newLink + '" target="_blank" style="color: #58a6ff; word-break: break-all;">' + newLink + '</a>';
@@ -1588,6 +1590,19 @@
         addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
         if (error.stack) addLog('📚 ' + error.stack.substring(0, 300) + '...', 'error');
         setStatus('Cập nhật thất bại', 'error');
+    }
+}
+// ===== Kiểm tra trạng thái nút cập nhật =====
+function checkUpdateButtonStatus() {
+    if (selectedApp && resultLink.value && resultLink.value.indexOf('itms-services://') !== -1) {
+        updateAppLinkBtn.disabled = false;
+        updateAppLinkBtn.title = 'Có link mới để cập nhật';
+    } else if (selectedApp) {
+        updateAppLinkBtn.disabled = true;
+        updateAppLinkBtn.title = 'Chưa có link mới, hãy mirror trước';
+    } else {
+        updateAppLinkBtn.disabled = true;
+        updateAppLinkBtn.title = 'Chưa chọn app';
     }
 }
 
@@ -1653,20 +1668,25 @@
         });
 
        // ===== Sửa lại event listener cho nút cập nhật =====
+// ===== Sửa lại event listener cho nút cập nhật =====
 updateAppLinkBtn.addEventListener('click', function() {
     addLog('🔘 Đã nhấn nút "Cập nhật link"', 'info');
     
     // Kiểm tra đã chọn app chưa
     if (!selectedApp) {
         addLog('⚠️ Vui lòng chọn app từ danh sách trước', 'error');
+        addLog('💡 Click vào một app trong danh sách để chọn', 'info');
         return;
     }
     
     // Kiểm tra đã có link mới chưa
     var newLink = resultLink.value;
+    addLog('🔍 Link trong ô kết quả: ' + (newLink || 'trống'), 'info');
+    
     if (!newLink || newLink.indexOf('itms-services://') === -1) {
         addLog('⚠️ Chưa có link ITMS mới!', 'error');
         addLog('💡 Hãy mirror IPA trước để có link mới', 'info');
+        addLog('💡 Link hiện tại: ' + (newLink || 'chưa có'), 'warning');
         return;
     }
     
