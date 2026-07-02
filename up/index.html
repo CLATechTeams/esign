@@ -1068,53 +1068,56 @@
 function parsePlist(xmlText) {
     var parser = new DOMParser();
     var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    
-    // Tìm tất cả string
-    var strings = xmlDoc.getElementsByTagName('string');
-    var allStrings = [];
-    for (var i = 0; i < strings.length; i++) {
-        allStrings.push(strings[i].textContent);
+
+    // Helper: đọc 1 <dict> thành object { key: value } (chỉ xử lý value dạng <string>)
+    function dictToObject(dictEl) {
+        var obj = {};
+        var children = dictEl.children; // các con trực tiếp: key, string, dict, array...
+        for (var i = 0; i < children.length; i++) {
+            if (children[i].tagName === 'key') {
+                var keyName = children[i].textContent;
+                var valueEl = children[i + 1]; // phần tử ngay sau key
+                if (valueEl) {
+                    if (valueEl.tagName === 'string') {
+                        obj[keyName] = valueEl.textContent;
+                    } else {
+                        obj[keyName] = valueEl; // dict/array -> trả về node để xử lý tiếp nếu cần
+                    }
+                }
+            }
+        }
+        return obj;
     }
-    
-    // Tìm IPA URL - string đầu tiên có http và .ipa
+
+    // Tìm ipaUrl: duyệt tất cả <dict> có key = 'url' và kind = 'software-package'
     var ipaUrl = null;
-    for (var j = 0; j < allStrings.length; j++) {
-        var str = allStrings[j];
-        if (str.indexOf('http') === 0 && str.indexOf('.ipa') !== -1) {
-            ipaUrl = str;
-            break;
+    var allDicts = xmlDoc.getElementsByTagName('dict');
+    var metadataObj = {};
+
+    for (var d = 0; d < allDicts.length; d++) {
+        var obj = dictToObject(allDicts[d]);
+
+        // dict "assets" con: { kind: 'software-package', url: '...' }
+        if (!ipaUrl && obj.kind === 'software-package' && obj.url) {
+            ipaUrl = obj.url;
+        }
+
+        // dict "metadata": chứa bundle-identifier, bundle-version, title
+        if (obj['bundle-identifier'] !== undefined || obj.title !== undefined) {
+            metadataObj = obj;
         }
     }
-    
-    
-    var bundleId = null;
-    var bundleVersion = null;
-    var appName = null;
-    
-    for (var k = 0; k < allStrings.length; k++) {
-        var str = allStrings[k];
-        if (str === 'bundle-identifier' && k + 1 < allStrings.length) {
-            bundleId = allStrings[k + 1];
-        }
-        if (str === 'bundle-version' && k + 1 < allStrings.length) {
-            bundleVersion = allStrings[k + 1];
-        }
-        if (str === 'title' && k + 1 < allStrings.length) {
-            appName = allStrings[k + 1];
-        }
-    }
-    
-    // Fallback nếu không tìm thấy
-    if (!bundleId) bundleId = '';
-    if (!bundleVersion) bundleVersion = '';
-    if (!appName) appName = '';
-    
+
+    var bundleId = metadataObj['bundle-identifier'] || '';
+    var bundleVersion = metadataObj['bundle-version'] || '';
+    var appName = metadataObj['title'] || '';
+
     var appSub = 'Unknown';
     if (ipaUrl) {
         var urlMatch = ipaUrl.match(/\/\/([^\/]+)/);
         if (urlMatch) appSub = urlMatch[1];
     }
-    
+
     return {
         ipaUrl: ipaUrl,
         appName: appName,
