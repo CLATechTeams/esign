@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPA Auto Mirror Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #161b22;
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid #30363d;
+        }
+
+        h1 {
+            color: #f0f6fc;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 28px;
+        }
+
+        .github-badge {
+            background: #238636;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+            background: #21262d;
+        }
+
+        .status-badge.success {
+            background: #238636;
+            color: #f0f6fc;
+        }
+
+        .status-badge.error {
+            background: #da3633;
+            color: #f0f6fc;
+        }
+
+        .status-badge.processing {
+            background: #d29922;
+            color: #f0f6fc;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #f0f6fc;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            font-size: 15px;
+            background: #0d1117;
+            color: #c9d1d9;
+            transition: border-color 0.3s;
+            font-family: 'Courier New', monospace;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #2ea043;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(35, 134, 54, 0.3);
+        }
+
+        .btn:disabled {
+            background: #21262d;
+            color: #484f58;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #30363d;
+        }
+
+        .btn-full {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+        }
+
+        .progress-container {
+            margin-top: 25px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #21262d;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #238636, #2ea043);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 5px;
+        }
+
+        .log-container {
+            margin-top: 20px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .log-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .log-container::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        .log-container::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            margin: 4px 0;
+            padding: 4px 0;
+            border-bottom: 1px solid #161b22;
+            opacity: 0;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .log-entry.success {
+            color: #3fb950;
+        }
+
+        .log-entry.error {
+            color: #f85149;
+        }
+
+        .log-entry.info {
+            color: #58a6ff;
+        }
+
+        .log-entry.warning {
+            color: #d29922;
+        }
+
+        .log-entry.link {
+            color: #58a6ff;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .result-box {
+            margin-top: 20px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+        }
+
+        .result-box h3 {
+            color: #f0f6fc;
+            margin-bottom: 10px;
+        }
+
+        .result-link {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .result-link input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            background: #161b22;
+            color: #58a6ff;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .result-link .btn {
+            padding: 10px 16px;
+            font-size: 13px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #21262d;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f0f6fc;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-top: 4px;
+        }
+
+        .app-preview {
+            margin-top: 20px;
+            padding: 20px;
+            background: #0d1117;
+            border-radius: 8px;
+            border: 1px solid #21262d;
+            display: none;
+        }
+
+        .app-preview .app-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+
+        .app-preview .app-sub {
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .app-preview .app-detail {
+            margin-top: 12px;
+            padding: 10px;
+            background: #161b22;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .app-preview .app-detail span {
+            color: #c9d1d9;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .info-box {
+            background: #1c2333;
+            border-left: 3px solid #58a6ff;
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: #8b949e;
+        }
+
+        .info-box strong {
+            color: #f0f6fc;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 20px;
+                flex-wrap: wrap;
+            }
+            
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .result-link {
+                flex-direction: column;
+            }
+            
+            .stats {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            🔄 IPA Auto Mirror
+            <span class="github-badge">🐙 GitHub</span>
+            <span id="statusBadge" class="status-badge">Sẵn sàng</span>
+        </h1>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="processedCount">0</div>
+                <div class="stat-label">✅ Đã xử lý</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalSize">0 MB</div>
+                <div class="stat-label">📦 Tổng dung lượng</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="lastUpdate">-</div>
+                <div class="stat-label">⏱️ Cập nhật cuối</div>
+            </div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="form-group">
+            <label for="plistUrl">🔗 URL Plist cần mirror</label>
+            <div class="input-group">
+                <input type="text" id="plistUrl" placeholder="https://website.khoindvn.io.vn/plists/fwcreuimtmig.plist">
+                <button class="btn" id="fetchBtn">📥 Lấy thông tin</button>
+            </div>
+        </div>
+
+        <!-- App Preview -->
+        <div class="app-preview" id="appPreview">
+            <div>
+                <span class="app-name" id="previewTitle">Tên ứng dụng</span>
+                <span class="app-sub" id="previewSub">Nhà phát hành</span>
+            </div>
+            <div class="app-detail">
+                <div>📦 Bundle ID: <span id="previewBundleId">-</span></div>
+                <div>📌 Bundle Version: <span id="previewVersion">-</span></div>
+                <div>🔗 IPA URL: <span id="previewIpaUrl" style="color: #58a6ff; word-break: break-all;">-</span></div>
+                <div>🆔 Plist ID: <span id="previewPlistId" style="color: #d29922;">-</span></div>
+            </div>
+        </div>
+
+        <!-- GitHub Config -->
+        <div class="info-box">
+            <strong>⚙️ Cấu hình GitHub</strong><br>
+            Nhập thông tin repository của bạn để upload IPA và plist
+        </div>
+
+        <div class="form-group">
+            <label for="githubToken">🔑 GitHub Token</label>
+            <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="font-family: monospace;">
+            <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+                Tạo tại Settings → Developer settings → Personal access tokens → Tokens (classic)<br>
+                Cần quyền: <strong>repo</strong> và <strong>workflow</strong>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="repoOwner">👤 GitHub Username</label>
+            <input type="text" id="repoOwner" placeholder="username" style="font-family: monospace;">
+        </div>
+
+        <div class="form-group">
+            <label for="repoName">📂 Repository Name</label>
+            <input type="text" id="repoName" placeholder="repository-name" style="font-family: monospace;">
+            <div style="font-size: 12px; color: #8b949e; margin-top: 5px;">
+                Ví dụ: nếu repo là <strong>https://github.com/username/repo-name</strong><br>
+                thì username = <strong>username</strong>, repo = <strong>repo-name</strong>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="repoBranch">🌿 Branch</label>
+            <input type="text" id="repoBranch" value="main" style="font-family: monospace;">
+        </div>
+
+        <div class="form-group">
+            <label for="commitMsg">📝 Commit Message (tùy chọn)</label>
+            <input type="text" id="commitMsg" placeholder="Mirror IPA from plist">
+        </div>
+
+        <div class="checkbox-group">
+            <input type="checkbox" id="autoUpdate" checked>
+            <label for="autoUpdate" style="margin: 0; font-size: 13px; color: #8b949e;">
+                Tự động cập nhật plist với link IPA mới
+            </label>
+        </div>
+
+        <button class="btn btn-full" id="mirrorBtn" disabled>
+            🚀 Bắt đầu Mirror
+        </button>
+
+        <!-- Progress -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-info">
+                <span id="progressText">Đang xử lý...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <!-- Result -->
+        <div class="result-box" id="resultBox">
+            <h3>✅ Mirror thành công!</h3>
+            <div class="result-link">
+                <input type="text" id="resultLink" readonly>
+                <button class="btn" id="copyBtn">📋 Copy</button>
+                <button class="btn btn-secondary" id="openBtn">🔗 Mở</button>
+            </div>
+            <div style="margin-top: 10px; font-size: 13px; color: #8b949e;">
+                ⚡ Link này đã được cập nhật với IPA mới trên GitHub
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="log-container" id="logContainer"></div>
+    </div>
+
+    <script>
+        // ===== State =====
+        let plistData = null;
+        let ipaFile = null;
+        let isProcessing = false;
+        let processedCount = parseInt(localStorage.getItem('mirror_processed') || '0');
+        let totalSize = parseInt(localStorage.getItem('mirror_total_size') || '0');
+
+        // ===== DOM Elements =====
+        const plistUrl = document.getElementById('plistUrl');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const mirrorBtn = document.getElementById('mirrorBtn');
+        const githubToken = document.getElementById('githubToken');
+        const repoOwner = document.getElementById('repoOwner');
+        const repoName = document.getElementById('repoName');
+        const repoBranch = document.getElementById('repoBranch');
+        const commitMsg = document.getElementById('commitMsg');
+        const autoUpdate = document.getElementById('autoUpdate');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const progressPercent = document.getElementById('progressPercent');
+        const logContainer = document.getElementById('logContainer');
+        const statusBadge = document.getElementById('statusBadge');
+        const processedCountEl = document.getElementById('processedCount');
+        const totalSizeEl = document.getElementById('totalSize');
+        const lastUpdateEl = document.getElementById('lastUpdate');
+        const appPreview = document.getElementById('appPreview');
+        const previewTitle = document.getElementById('previewTitle');
+        const previewSub = document.getElementById('previewSub');
+        const previewBundleId = document.getElementById('previewBundleId');
+        const previewVersion = document.getElementById('previewVersion');
+        const previewIpaUrl = document.getElementById('previewIpaUrl');
+        const previewPlistId = document.getElementById('previewPlistId');
+        const resultBox = document.getElementById('resultBox');
+        const resultLink = document.getElementById('resultLink');
+        const copyBtn = document.getElementById('copyBtn');
+        const openBtn = document.getElementById('openBtn');
+
+        // Load saved config
+        const savedConfig = JSON.parse(localStorage.getItem('mirror_config') || '{}');
+        if (savedConfig.token) githubToken.value = savedConfig.token;
+        if (savedConfig.owner) repoOwner.value = savedConfig.owner;
+        if (savedConfig.repo) repoName.value = savedConfig.repo;
+        if (savedConfig.branch) repoBranch.value = savedConfig.branch;
+
+        // Update stats
+        processedCountEl.textContent = processedCount;
+        totalSizeEl.textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
+
+        // ===== Utility Functions =====
+        function setStatus(text, type = 'info') {
+            statusBadge.textContent = text;
+            statusBadge.className = 'status-badge';
+            if (type === 'success') statusBadge.classList.add('success');
+            if (type === 'error') statusBadge.classList.add('error');
+            if (type === 'processing') statusBadge.classList.add('processing');
+        }
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            logContainer.style.display = 'block';
+        }
+
+        function updateProgress(percent, text = '') {
+            progressFill.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+            if (text) progressText.textContent = text;
+        }
+
+        function getToken() {
+            const token = githubToken.value.trim();
+            if (!token) {
+                addLog('⚠️ Vui lòng nhập GitHub Token', 'warning');
+                return null;
+            }
+            return token;
+        }
+
+        function getRepoInfo() {
+            const owner = repoOwner.value.trim();
+            const repo = repoName.value.trim();
+            const branch = repoBranch.value.trim() || 'main';
+            
+            if (!owner || !repo) {
+                addLog('⚠️ Vui lòng nhập đầy đủ GitHub Username và Repository Name', 'error');
+                return null;
+            }
+            
+            // Save config
+            localStorage.setItem('mirror_config', JSON.stringify({
+                token: githubToken.value.trim(),
+                owner: owner,
+                repo: repo,
+                branch: branch
+            }));
+            
+            return { owner, repo, branch };
+        }
+
+        // ===== GitHub API =====
+        async function githubRequest(endpoint, method = 'GET', data = null, token = null, repoInfo = null) {
+            const info = repoInfo || getRepoInfo();
+            if (!info) throw new Error('Invalid repository');
+            
+            const url = `https://api.github.com/repos/${info.owner}/${info.repo}${endpoint}`;
+            const headers = {
+                'Accept': 'application/vnd.github.v3+json',
+            };
+            
+            if (token) {
+                headers['Authorization'] = `token ${token}`;
+            }
+
+            const options = { method, headers };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+                headers['Content-Type'] = 'application/json';
+            }
+
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        async function uploadToGitHub(file, path, token, repoInfo, message = null) {
+            const content = await file.arrayBuffer();
+            const base64Content = btoa(String.fromCharCode(...new Uint8Array(content)));
+
+            const data = {
+                message: message || `Upload ${file.name}`,
+                content: base64Content,
+                branch: repoInfo.branch
+            };
+
+            // Check if file exists
+            try {
+                const existing = await githubRequest(`/contents/${path}`, 'GET', null, token, repoInfo);
+                if (existing) {
+                    data.sha = existing.sha;
+                }
+            } catch (error) {
+                // File doesn't exist, continue
+            }
+
+            const result = await githubRequest(`/contents/${path}`, 'PUT', data, token, repoInfo);
+            return result.content.download_url;
+        }
+
+        // ===== Parse Plist =====
+        function parsePlist(xmlText) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            
+            // Get all string elements
+            const strings = xmlDoc.getElementsByTagName('string');
+            
+            let ipaUrl = null;
+            let appName = null;
+            let bundleId = null;
+            let bundleVersion = null;
+            let allStrings = [];
+            
+            // First pass: collect all strings
+            for (let i = 0; i < strings.length; i++) {
+                allStrings.push(strings[i].textContent);
+            }
+            
+            // Parse metadata
+            // Look for bundle-identifier pattern
+            const bundleIdIndex = allStrings.findIndex(s => s.includes('bundle-identifier'));
+            if (bundleIdIndex !== -1 && bundleIdIndex + 1 < allStrings.length) {
+                bundleId = allStrings[bundleIdIndex + 1];
+            }
+            
+            // Look for bundle-version
+            const versionIndex = allStrings.findIndex(s => s.includes('bundle-version'));
+            if (versionIndex !== -1 && versionIndex + 1 < allStrings.length) {
+                bundleVersion = allStrings[versionIndex + 1];
+            }
+            
+            // Look for title
+            const titleIndex = allStrings.findIndex(s => s.includes('title'));
+            if (titleIndex !== -1 && titleIndex + 1 < allStrings.length) {
+                appName = allStrings[titleIndex + 1];
+            }
+            
+            // Find IPA URL
+            for (const str of allStrings) {
+                if (str.startsWith('http') && (str.endsWith('.ipa') || str.includes('/ipa/'))) {
+                    ipaUrl = str;
+                    break;
+                }
+            }
+            
+            // Try alternative: look in assets array
+            if (!ipaUrl) {
+                const dicts = xmlDoc.getElementsByTagName('dict');
+                for (const dict of dicts) {
+                    const children = dict.children;
+                    for (let i = 0; i < children.length; i++) {
+                        if (children[i].tagName === 'key' && children[i].textContent === 'url') {
+                            if (i + 1 < children.length && children[i + 1].tagName === 'string') {
+                                const url = children[i + 1].textContent;
+                                if (url.startsWith('http')) {
+                                    ipaUrl = url;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (ipaUrl) break;
+                }
+            }
+            
+            // Get app sub/company from plist URL or metadata
+            let appSub = 'Unknown';
+            // Try to get from URL
+            const urlMatch = ipaUrl ? ipaUrl.match(/\/\/([^\/]+)/) : null;
+            if (urlMatch) {
+                appSub = urlMatch[1];
+            }
+            
+            return {
+                ipaUrl: ipaUrl,
+                appName: appName || 'ESign',
+                bundleId: bundleId || 'com.esign.app',
+                bundleVersion: bundleVersion || '1.0.0',
+                appSub: appSub,
+                rawContent: xmlText
+            };
+        }
+
+        // ===== Fetch Plist =====
+        async function fetchPlist(url) {
+            try {
+                addLog(`📥 Đang tải plist từ: ${url}`, 'info');
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const text = await response.text();
+                
+                // Parse plist
+                const parsed = parsePlist(text);
+                
+                if (!parsed.ipaUrl) {
+                    throw new Error('Không tìm thấy URL IPA trong plist');
+                }
+
+                // Extract plist ID from URL
+                const plistId = url.split('/').pop().replace('.plist', '');
+
+                plistData = {
+                    url: url,
+                    plistId: plistId,
+                    ipaUrl: parsed.ipaUrl,
+                    appName: parsed.appName,
+                    appSub: parsed.appSub,
+                    bundleId: parsed.bundleId,
+                    bundleVersion: parsed.bundleVersion,
+                    rawContent: text
+                };
+
+                // Show preview with ALL extracted info
+                previewTitle.textContent = plistData.appName;
+                previewSub.textContent = plistData.appSub;
+                previewBundleId.textContent = plistData.bundleId;
+                previewVersion.textContent = plistData.bundleVersion;
+                previewIpaUrl.textContent = plistData.ipaUrl;
+                previewPlistId.textContent = plistData.plistId;
+                appPreview.style.display = 'block';
+
+                addLog(`✅ Đã tải plist thành công`, 'success');
+                addLog(`📱 Ứng dụng: ${plistData.appName}`, 'info');
+                addLog(`📦 Bundle ID: ${plistData.bundleId}`, 'info');
+                addLog(`📌 Version: ${plistData.bundleVersion}`, 'info');
+                addLog(`📦 IPA URL: ${plistData.ipaUrl}`, 'info');
+                
+                mirrorBtn.disabled = false;
+                setStatus('Đã tải plist', 'success');
+
+                return plistData;
+            } catch (error) {
+                addLog(`❌ Lỗi tải plist: ${error.message}`, 'error');
+                setStatus('Lỗi tải plist', 'error');
+                throw error;
+            }
+        }
+
+        // ===== Download IPA =====
+        async function downloadIPA(url) {
+            try {
+                addLog(`📥 Đang tải IPA từ: ${url}`, 'info');
+                updateProgress(30, 'Đang tải IPA...');
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const contentLength = response.headers.get('content-length');
+                const size = contentLength ? parseInt(contentLength) : 0;
+                
+                const blob = await response.blob();
+                const fileName = url.split('/').pop() || 'app.ipa';
+                
+                const file = new File([blob], fileName, { type: 'application/octet-stream' });
+                
+                addLog(`✅ Đã tải IPA: ${(file.size / 1024 / 1024).toFixed(2)} MB`, 'success');
+                updateProgress(50, 'Đã tải IPA thành công');
+                
+                return file;
+            } catch (error) {
+                addLog(`❌ Lỗi tải IPA: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // ===== Generate Plist =====
+        function generatePlistContent(plistData, ipaUrl) {
+            // Use ALL data from original plist
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>${ipaUrl}</string>
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>${plistData.bundleId}</string>
+                <key>bundle-version</key>
+                <string>${plistData.bundleVersion}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>${plistData.appName}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>`;
+        }
+
+        // ===== Main Mirror Process =====
+        async function startMirror() {
+            if (isProcessing) return;
+            if (!plistData) {
+                addLog('⚠️ Vui lòng tải plist trước', 'error');
+                return;
+            }
+
+            const token = getToken();
+            if (!token) return;
+
+            const repoInfo = getRepoInfo();
+            if (!repoInfo) return;
+
+            isProcessing = true;
+            mirrorBtn.disabled = true;
+            mirrorBtn.textContent = '⏳ Đang xử lý...';
+            progressContainer.style.display = 'block';
+            logContainer.innerHTML = '';
+            logContainer.style.display = 'block';
+            resultBox.style.display = 'none';
+            setStatus('Đang xử lý...', 'processing');
+
+            try {
+                // Step 1: Download IPA
+                const ipaFile = await downloadIPA(plistData.ipaUrl);
+                
+                // Step 2: Upload IPA to GitHub
+                updateProgress(60, 'Đang upload IPA lên GitHub...');
+                addLog(`📤 Đang upload ${ipaFile.name} lên GitHub...`, 'info');
+                
+                const ipaPath = `uploads/${plistData.plistId}/${ipaFile.name}`;
+                const ipaUrl = await uploadToGitHub(
+                    ipaFile, 
+                    ipaPath, 
+                    token, 
+                    repoInfo,
+                    commitMsg.value || `Upload IPA for ${plistData.plistId}`
+                );
+                
+                addLog(`✅ Upload IPA thành công`, 'success');
+                addLog(`🔗 IPA URL: ${ipaUrl}`, 'info');
+                updateProgress(80, 'IPA đã được upload');
+
+                // Step 3: Update plist if auto update is checked
+                let finalPlistUrl = null;
+                if (autoUpdate.checked) {
+                    addLog(`🔄 Đang cập nhật plist với link IPA mới...`, 'info');
+                    updateProgress(85, 'Đang cập nhật plist...');
+                    
+                    // Generate new plist with ALL original data
+                    const newPlist = generatePlistContent(plistData, ipaUrl);
+                    
+                    // Upload plist
+                    const plistPath = `plists/${plistData.plistId}.plist`;
+                    const plistFile = new File(
+                        [newPlist], 
+                        `${plistData.plistId}.plist`, 
+                        { type: 'text/xml' }
+                    );
+                    
+                    await uploadToGitHub(
+                        plistFile,
+                        plistPath,
+                        token,
+                        repoInfo,
+                        commitMsg.value || `Update plist for ${plistData.plistId}`
+                    );
+                    
+                    finalPlistUrl = `https://${repoInfo.owner}.github.io/${repoInfo.repo}/${plistPath}`;
+                    addLog(`✅ Cập nhật plist thành công`, 'success');
+                } else {
+                    // Use original plist URL
+                    finalPlistUrl = plistData.url;
+                    addLog(`ℹ️ Giữ nguyên plist gốc (không cập nhật)`, 'info');
+                }
+
+                // Step 4: Show result
+                updateProgress(100, 'Hoàn tất!');
+                
+                const itmsLink = `itms-services://?action=download-manifest&url=${finalPlistUrl}`;
+                resultLink.value = itmsLink;
+                resultBox.style.display = 'block';
+
+                // Update stats
+                processedCount++;
+                totalSize += ipaFile.size;
+                localStorage.setItem('mirror_processed', processedCount);
+                localStorage.setItem('mirror_total_size', totalSize);
+                processedCountEl.textContent = processedCount;
+                totalSizeEl.textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
+                lastUpdateEl.textContent = new Date().toLocaleTimeString();
+
+                addLog(`🎉 Mirror hoàn tất!`, 'success');
+                addLog(`📱 Bundle ID: ${plistData.bundleId}`, 'info');
+                addLog(`📌 Version: ${plistData.bundleVersion}`, 'info');
+                addLog(`🔗 Link mới: ${itmsLink}`, 'link');
+                setStatus('Thành công ✅', 'success');
+
+                // Auto copy
+                navigator.clipboard.writeText(itmsLink).then(() => {
+                    addLog('📋 Đã copy link vào clipboard', 'success');
+                }).catch(() => {});
+
+            } catch (error) {
+                addLog(`❌ Lỗi: ${error.message}`, 'error');
+                setStatus('Thất bại ❌', 'error');
+                updateProgress(0, 'Đã xảy ra lỗi');
+            } finally {
+                isProcessing = false;
+                mirrorBtn.disabled = false;
+                mirrorBtn.textContent = '🚀 Bắt đầu Mirror';
+                setTimeout(() => {
+                    if (!isProcessing) {
+                        progressContainer.style.display = 'none';
+                    }
+                }, 3000);
+            }
+        }
+
+        // ===== Event Listeners =====
+        fetchBtn.addEventListener('click', async () => {
+            const url = plistUrl.value.trim();
+            if (!url) {
+                addLog('⚠️ Vui lòng nhập URL plist', 'error');
+                return;
+            }
+            if (!url.endsWith('.plist')) {
+                addLog('⚠️ URL phải kết thúc bằng .plist', 'error');
+                return;
+            }
+            
+            fetchBtn.disabled = true;
+            fetchBtn.textContent = '⏳ Đang tải...';
+            
+            try {
+                await fetchPlist(url);
+            } catch (error) {
+                // Error already logged
+            } finally {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = '📥 Lấy thông tin';
+            }
+        });
+
+        mirrorBtn.addEventListener('click', startMirror);
+
+        copyBtn.addEventListener('click', () => {
+            resultLink.select();
+            navigator.clipboard.writeText(resultLink.value).then(() => {
+                addLog('📋 Đã copy link vào clipboard', 'success');
+            }).catch(() => {
+                document.execCommand('copy');
+                addLog('📋 Đã copy link', 'success');
+            });
+        });
+
+        openBtn.addEventListener('click', () => {
+            window.open(resultLink.value, '_blank');
+        });
+
+        // Enter key support
+        plistUrl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                fetchBtn.click();
+            }
+        });
+
+        // ===== Initialize =====
+        addLog('🚀 Khởi tạo IPA Auto Mirror Tool', 'info');
+        addLog('📌 Nhập URL plist và nhấn "Lấy thông tin" để bắt đầu', 'info');
+        addLog('⚙️ Nhập thông tin GitHub repository của bạn', 'info');
+
+        // Check URL param
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlParam = urlParams.get('url');
+        if (urlParam) {
+            plistUrl.value = urlParam;
+            setTimeout(() => fetchBtn.click(), 500);
+        }
+    </script>
+</body>
+</html>
