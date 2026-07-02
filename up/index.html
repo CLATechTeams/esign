@@ -1581,148 +1581,219 @@ window.selectAppForLink = function(index) {
 
         // ===== CẬP NHẬT TẤT CẢ APP ĐÃ GÁN LINK =====
         updateAllBtn.addEventListener('click', async function() {
-            if (isUpdating) {
-                addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
-                return;
+    if (isUpdating) {
+        addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
+        return;
+    }
+
+    var count = Object.keys(assignedApps).length;
+    if (count === 0) {
+        addLog('⚠️ Chưa gán link cho app nào', 'error');
+        return;
+    }
+
+    var token = getToken();
+    if (!token) return;
+
+    var repoInfo = getRepoInfo();
+    if (!repoInfo) return;
+
+    isUpdating = true;
+    updateAllBtn.disabled = true;
+    assignedStatus.textContent = '⏳ Đang cập nhật...';
+    assignedStatus.style.color = '#d29922';
+
+    addLog('🚀 Bắt đầu cập nhật ' + count + ' app với link riêng...', 'info');
+
+    // ---- helpers: pure string surgery, no DOM re-serialization ----
+
+    // Tìm vùng [start,end] của phần tử có id = targetId trong chuỗi HTML gốc,
+    // đếm độ sâu thẻ để tìm đúng thẻ đóng tương ứng (không dùng regex "tham lam").
+    function extractElementRangeById(html, targetId) {
+        var openTagRe = new RegExp('<([a-zA-Z0-9]+)([^>]*\\bid=["\']' + targetId + '["\'][^>]*)>');
+        var m = openTagRe.exec(html);
+        if (!m) return null;
+
+        var tagName = m[1];
+        var contentStart = m.index + m[0].length;
+
+        var combinedRe = new RegExp('<' + tagName + '(?:\\s[^>]*)?>|</' + tagName + '>', 'gi');
+        combinedRe.lastIndex = contentStart;
+
+        var depth = 1;
+        var match, contentEnd = -1;
+        while ((match = combinedRe.exec(html)) !== null) {
+            if (match[0].charAt(1) === '/') {
+                depth--;
+                if (depth === 0) { contentEnd = match.index; break; }
+            } else {
+                depth++;
             }
+        }
+        if (contentEnd === -1) return null;
 
-            var count = Object.keys(assignedApps).length;
-            if (count === 0) {
-                addLog('⚠️ Chưa gán link cho app nào', 'error');
-                return;
-            }
+        var fullEnd = contentEnd + ('</' + tagName + '>').length;
+        return { openTagStart: m.index, contentStart: contentStart, contentEnd: contentEnd, fullEnd: fullEnd };
+    }
 
-            var token = getToken();
-            if (!token) return;
+    // Tìm vị trí chính xác (offset) của giá trị href trong từng thẻ <a class="app-row" ...>,
+    // theo đúng thứ tự xuất hiện (khớp với querySelectorAll('.app-row')).
+    function findAppRowHrefRanges(html) {
+        var ranges = [];
+        var tagRe = /<a\b[^>]*>/gi;
+        var m;
+        while ((m = tagRe.exec(html)) !== null) {
+            var tag = m[0];
+            if (!/\bclass\s*=\s*(["'])[^"']*\bapp-row\b[^"']*\1/i.test(tag)) continue;
 
-            var repoInfo = getRepoInfo();
-            if (!repoInfo) return;
+            var hrefMatch = /\bhref\s*=\s*(["'])([\s\S]*?)\1/i.exec(tag);
+            if (!hrefMatch) continue;
 
-            isUpdating = true;
-            updateAllBtn.disabled = true;
-            assignedStatus.textContent = '⏳ Đang cập nhật...';
-            assignedStatus.style.color = '#d29922';
+            var quotePos = tag.indexOf(hrefMatch[1], hrefMatch.index + hrefMatch[0].indexOf('=') );
+            var valueStart = m.index + hrefMatch.index + hrefMatch[0].indexOf(hrefMatch[2]);
+            var valueEnd = valueStart + hrefMatch[2].length;
 
-            addLog('🚀 Bắt đầu cập nhật ' + count + ' app với link riêng...', 'info');
+            ranges.push({ start: valueStart, end: valueEnd, oldValue: hrefMatch[2] });
+        }
+        return ranges;
+    }
+
+    try {
+        var indexPath = indexPagePath.value.trim() || 'index.html';
+
+        addLog('📥 Đang tải file ' + indexPath + ' từ GitHub...', 'info');
+        var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
+        var sha = result.sha;
+        var content = atob(result.content);
+        addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
+
+        var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
+
+        // Chỉ dùng DOM để xác định số lượng app-row (không dùng để ghi lại file)
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(content, 'text/html');
+        var container = doc.getElementById(targetId);
+        if (!container) {
+            throw new Error('Không tìm thấy container #' + targetId + ' trong file HTML');
+        }
+        var appRowEls = container.querySelectorAll('.app-row');
+        addLog('🔍 Tìm thấy ' + appRowEls.length + ' app-row trong #' + targetId, 'info');
+
+        // Xác định vùng container trong CHUỖI GỐC (không phải DOM đã parse lại)
+        var elRange = extractElementRangeById(content, targetId);
+        if (!elRange) {
+            throw new Error('Không xác định được vị trí #' + targetId + ' trong chuỗi HTML gốc');
+        }
+        var containerHtml = content.slice(elRange.contentStart, elRange.contentEnd);
+        var hrefRanges = findAppRowHrefRanges(containerHtml);
+
+        if (hrefRanges.length !== appRowEls.length) {
+            addLog('⚠️ Cảnh báo: số app-row DOM (' + appRowEls.length + ') khác số tìm được bằng chuỗi (' + hrefRanges.length + '), tiếp tục thận trọng', 'warning');
+        }
+
+        var updatedCount = 0;
+        var keys = Object.keys(assignedApps);
+        var edits = []; // { start, end, newValue } tính theo offset trong containerHtml
+
+        for (var i = 0; i < keys.length; i++) {
+            var index = parseInt(keys[i]);
+            var item = assignedApps[index];
+            if (!item) continue;
 
             try {
-                var indexPath = indexPagePath.value.trim() || 'index.html';
-
-                addLog('📥 Đang tải file ' + indexPath + ' từ GitHub...', 'info');
-                var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
-                var sha = result.sha;
-                var content = atob(result.content);
-                addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
-
-                var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
-
-                // Parse toàn bộ HTML bằng DOM thay vì regex trên chuỗi
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(content, 'text/html');
-                var container = doc.getElementById(targetId);
-
-                if (!container) {
-                    throw new Error('Không tìm thấy container #' + targetId + ' trong file HTML');
+                if (index < 0 || index >= hrefRanges.length) {
+                    addLog('⚠️ Không tìm thấy app "' + item.app.title + '" (index ' + index + ') trong HTML, bỏ qua', 'warning');
+                    continue;
                 }
 
-                var appRowEls = container.querySelectorAll('.app-row');
-                addLog('🔍 Tìm thấy ' + appRowEls.length + ' app-row trong #' + targetId, 'info');
+                var range = hrefRanges[index];
 
-                var updatedCount = 0;
-                var keys = Object.keys(assignedApps);
-
-                for (var i = 0; i < keys.length; i++) {
-                    var index = parseInt(keys[i]);
-                    var item = assignedApps[index];
-                    if (!item) continue;
-
-                    try {
-                        if (index < 0 || index >= appRowEls.length) {
-                            addLog('⚠️ Không tìm thấy app "' + item.app.title + '" (index ' + index + ') trong HTML, bỏ qua', 'warning');
-                            continue;
-                        }
-
-                        var rowEl = appRowEls[index];
-                        var oldLink = rowEl.getAttribute('href');
-
-                        if (oldLink === item.newLink) {
-                            addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
-                            continue;
-                        }
-
-                        // Set trực tiếp trên element DOM, không phụ thuộc offset chuỗi
-                        rowEl.setAttribute('href', item.newLink);
-
-                        item.app.plistUrl = item.newLink;
-                        updatedCount++;
-                        addLog('✅ Đã cập nhật link cho "' + item.app.title + '" (index ' + index + ')', 'success');
-                    } catch (itemError) {
-                        addLog('⚠️ Lỗi khi xử lý app "' + item.app.title + '": ' + itemError.message + ' — bỏ qua, tiếp tục app khác', 'warning');
-                        continue;
-                    }
+                if (range.oldValue === item.newLink) {
+                    addLog('⏭️ App "' + item.app.title + '" đã có link này rồi, bỏ qua', 'info');
+                    continue;
                 }
 
-                if (updatedCount === 0) {
-                    addLog('⚠️ Không có app nào cần cập nhật', 'warning');
-                    isUpdating = false;
-                    updateAllBtn.disabled = false;
-                    assignedStatus.textContent = '⏭️ Không cần cập nhật';
-                    assignedStatus.style.color = '#d29922';
-                    updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
-                    return;
-                }
-
-                // Serialize lại toàn bộ document thành HTML string
-                var newContent = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-
-                function utf8ToBase64(str) {
-                    var bytes = new TextEncoder().encode(str);
-                    var binary = '';
-                    for (var j = 0; j < bytes.length; j++) {
-                        binary += String.fromCharCode(bytes[j]);
-                    }
-                    return btoa(binary);
-                }
-
-                var base64Content = utf8ToBase64(newContent);
-
-                var updateData = {
-                    message: 'Batch update ' + updatedCount + ' apps - ' + new Date().toLocaleString(),
-                    content: base64Content,
-                    sha: sha,
-                    branch: repoInfo.branch || 'main'
-                };
-
-                addLog('📤 Đang upload file lên GitHub (' + updatedCount + ' app)...', 'info');
-                await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
-
-                addLog('🎉 Đã cập nhật thành công ' + updatedCount + ' app!', 'success');
-                var pageUrl = 'https://' + repoInfo.owner + '.github.io/' + repoInfo.repo + '/';
-                addLog('🔗 Xem tại: ' + pageUrl, 'link');
-
-                assignedStatus.textContent = '✅ Đã cập nhật ' + updatedCount + ' app!';
-                assignedStatus.style.color = '#3fb950';
-
-                assignedApps = {};
-                updateAssignedUI();
-                renderAppList();
-                setStatus('Đã cập nhật ' + updatedCount + ' app ✅', 'success');
-
-                // Cập nhật lại danh sách từ GitHub (để lấy đúng href mới nhất)
-                await loadAppsFromIndexPage(currentAppType);
-
-            } catch (error) {
-                addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
-                if (error.stack) addLog('📚 Stack: ' + error.stack.substring(0, 500) + '...', 'error');
-                setStatus('Cập nhật thất bại', 'error');
-                assignedStatus.textContent = '❌ Thất bại';
-                assignedStatus.style.color = '#f85149';
-            } finally {
-                isUpdating = false;
-                updateAllBtn.disabled = false;
-                updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
+                edits.push({ start: range.start, end: range.end, newValue: item.newLink });
+                item.app.plistUrl = item.newLink;
+                updatedCount++;
+                addLog('✅ Đã cập nhật link cho "' + item.app.title + '" (index ' + index + ')', 'success');
+            } catch (itemError) {
+                addLog('⚠️ Lỗi khi xử lý app "' + item.app.title + '": ' + itemError.message + ' — bỏ qua, tiếp tục app khác', 'warning');
+                continue;
             }
-        });
+        }
+
+        if (updatedCount === 0) {
+            addLog('⚠️ Không có app nào cần cập nhật', 'warning');
+            isUpdating = false;
+            updateAllBtn.disabled = false;
+            assignedStatus.textContent = '⏭️ Không cần cập nhật';
+            assignedStatus.style.color = '#d29922';
+            updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
+            return;
+        }
+
+        // Áp dụng các thay đổi vào containerHtml, đi từ cuối lên đầu để offset không bị lệch
+        edits.sort(function(a, b) { return b.start - a.start; });
+        for (var e = 0; e < edits.length; e++) {
+            var ed = edits[e];
+            containerHtml = containerHtml.slice(0, ed.start) + ed.newValue + containerHtml.slice(ed.end);
+        }
+
+        // Ghép lại vào đúng vị trí trong chuỗi HTML gốc — mọi phần khác giữ nguyên 100%,
+        // không có DOCTYPE/html/head/body bị thêm vào, không có ký tự nào bị encode lại.
+        var newContent =
+            content.slice(0, elRange.contentStart) +
+            containerHtml +
+            content.slice(elRange.contentEnd);
+
+        function utf8ToBase64(str) {
+            var bytes = new TextEncoder().encode(str);
+            var binary = '';
+            for (var j = 0; j < bytes.length; j++) {
+                binary += String.fromCharCode(bytes[j]);
+            }
+            return btoa(binary);
+        }
+
+        var base64Content = utf8ToBase64(newContent);
+
+        var updateData = {
+            message: 'Batch update ' + updatedCount + ' apps - ' + new Date().toLocaleString(),
+            content: base64Content,
+            sha: sha,
+            branch: repoInfo.branch || 'main'
+        };
+
+        addLog('📤 Đang upload file lên GitHub (' + updatedCount + ' app)...', 'info');
+        await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
+
+        addLog('🎉 Đã cập nhật thành công ' + updatedCount + ' app!', 'success');
+        var pageUrl = 'https://' + repoInfo.owner + '.github.io/' + repoInfo.repo + '/';
+        addLog('🔗 Xem tại: ' + pageUrl, 'link');
+
+        assignedStatus.textContent = '✅ Đã cập nhật ' + updatedCount + ' app!';
+        assignedStatus.style.color = '#3fb950';
+
+        assignedApps = {};
+        updateAssignedUI();
+        renderAppList();
+        setStatus('Đã cập nhật ' + updatedCount + ' app ✅', 'success');
+
+        await loadAppsFromIndexPage(currentAppType);
+
+    } catch (error) {
+        addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
+        if (error.stack) addLog('📚 Stack: ' + error.stack.substring(0, 500) + '...', 'error');
+        setStatus('Cập nhật thất bại', 'error');
+        assignedStatus.textContent = '❌ Thất bại';
+        assignedStatus.style.color = '#f85149';
+    } finally {
+        isUpdating = false;
+        updateAllBtn.disabled = false;
+        updateAllBtn.textContent = '🚀 Cập nhật tất cả (' + Object.keys(assignedApps).length + ' app)';
+    }
+});
 
         // ============================================================
         // LOAD APPS FROM INDEX PAGE
