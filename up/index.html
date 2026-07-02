@@ -1065,7 +1065,7 @@
         // ============================================================
         // PARSE PLIST
         // ============================================================
-       function parsePlist(xmlText) {
+function parsePlist(xmlText) {
     var parser = new DOMParser();
     var xmlDoc = parser.parseFromString(xmlText, 'text/xml');
     
@@ -1076,7 +1076,10 @@
         allStrings.push(strings[i].textContent);
     }
     
-    // Tìm IPA URL
+    // Log để debug
+    console.log('📄 All strings in plist:', allStrings);
+    
+    // Tìm IPA URL - ưu tiên URL kết thúc bằng .ipa
     var ipaUrl = null;
     for (var j = 0; j < allStrings.length; j++) {
         var str = allStrings[j];
@@ -1086,39 +1089,83 @@
         }
     }
     
-    // Tìm bundle-identifier
+    // Tìm bundle-identifier - tìm trong tất cả string
     var bundleId = null;
     for (var k = 0; k < allStrings.length; k++) {
-        if (allStrings[k] === 'bundle-identifier' && k + 1 < allStrings.length) {
-            bundleId = allStrings[k + 1];
-            break;
+        var str = allStrings[k];
+        // Kiểm tra nếu string chứa bundle-identifier
+        if (str.indexOf('bundle-identifier') !== -1 || str.indexOf('bundle.identifier') !== -1) {
+            if (k + 1 < allStrings.length) {
+                bundleId = allStrings[k + 1];
+                break;
+            }
+        }
+        // Hoặc string có dạng com.xxx.xxx
+        if (str.match(/^com\.[a-zA-Z0-9\.]+$/)) {
+            bundleId = str;
+            // Không break vì có thể có nhiều, nhưng lấy cái đầu tiên
+            if (!bundleId) bundleId = str;
         }
     }
     
-    // Tìm bundle-version
+    // Tìm bundle-version - tìm trong tất cả string
     var bundleVersion = null;
     for (var l = 0; l < allStrings.length; l++) {
-        if (allStrings[l] === 'bundle-version' && l + 1 < allStrings.length) {
-            bundleVersion = allStrings[l + 1];
+        var str = allStrings[l];
+        if (str.indexOf('bundle-version') !== -1 || str.indexOf('bundle.version') !== -1) {
+            if (l + 1 < allStrings.length) {
+                bundleVersion = allStrings[l + 1];
+                break;
+            }
+        }
+        // Hoặc string có dạng số phiên bản X.X.X
+        if (str.match(/^\d+\.\d+\.\d+$/)) {
+            bundleVersion = str;
             break;
         }
     }
     
-    // Tìm title
+    // Tìm title - tìm trong tất cả string
     var appName = null;
     for (var m = 0; m < allStrings.length; m++) {
-        if (allStrings[m] === 'title' && m + 1 < allStrings.length) {
-            appName = allStrings[m + 1];
-            break;
+        var str = allStrings[m];
+        if (str.indexOf('title') !== -1 || str.indexOf('Title') !== -1) {
+            if (m + 1 < allStrings.length) {
+                appName = allStrings[m + 1];
+                break;
+            }
         }
     }
     
+    // Nếu vẫn chưa tìm thấy appName, lấy string đầu tiên không phải URL
+    if (!appName) {
+        for (var n = 0; n < allStrings.length; n++) {
+            var str = allStrings[n];
+            if (str && str.indexOf('http') !== 0 && str.length > 0 && str.length < 100) {
+                appName = str;
+                break;
+            }
+        }
+    }
+    
+    // Fallback values
+    if (!bundleId) bundleId = 'com.esign.app';
+    if (!bundleVersion) bundleVersion = '1.0.0';
+    if (!appName) appName = 'ESign';
+    
+    // Lấy appSub từ URL
+    var appSub = 'Unknown';
+    if (ipaUrl) {
+        var urlMatch = ipaUrl.match(/\/\/([^\/]+)/);
+        if (urlMatch) appSub = urlMatch[1];
+    }
     
     return {
         ipaUrl: ipaUrl,
         appName: appName,
         bundleId: bundleId,
         bundleVersion: bundleVersion,
+        appSub: appSub,
         rawContent: xmlText
     };
 }
@@ -1126,46 +1173,64 @@
         // ============================================================
         // FETCH PLIST
         // ============================================================
-        async function fetchPlist(url) {
-            try {
-                addLog('📥 Đang tải plist từ: ' + url, 'info');
-                var response = await fetch(url);
-                if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + response.statusText);
-                var text = await response.text();
-                var parsed = parsePlist(text);
-                if (!parsed.ipaUrl) throw new Error('Không tìm thấy URL IPA trong plist');
-                var plistId = url.split('/').pop().replace('.plist', '');
-                plistData = {
-                    url: url,
-                    plistId: plistId,
-                    ipaUrl: parsed.ipaUrl,
-                    appName: parsed.appName,
-                    appSub: parsed.appSub,
-                    bundleId: parsed.bundleId,
-                    bundleVersion: parsed.bundleVersion,
-                    rawContent: text
-                };
-                previewTitle.textContent = plistData.appName;
-                previewSub.textContent = plistData.appSub;
-                previewBundleId.textContent = plistData.bundleId;
-                previewVersion.textContent = plistData.bundleVersion;
-                previewIpaUrl.textContent = plistData.ipaUrl;
-                previewPlistId.textContent = plistData.plistId;
-                appPreview.style.display = 'block';
-                addLog('✅ Đã tải plist thành công', 'success');
-                addLog('📱 Ứng dụng: ' + plistData.appName, 'info');
-                addLog('📦 Bundle ID: ' + plistData.bundleId, 'info');
-                addLog('📌 Version: ' + plistData.bundleVersion, 'info');
-                addLog('📦 IPA URL: ' + plistData.ipaUrl, 'info');
-                mirrorBtn.disabled = false;
-                setStatus('Đã tải plist', 'success');
-                return plistData;
-            } catch (error) {
-                addLog('❌ Lỗi tải plist: ' + error.message, 'error');
-                setStatus('Lỗi tải plist', 'error');
-                throw error;
-            }
-        }
+      async function fetchPlist(url) {
+    try {
+        addLog('📥 Đang tải plist từ: ' + url, 'info');
+        var response = await fetch(url);
+        if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+        var text = await response.text();
+        
+        // Log toàn bộ nội dung plist để debug
+        addLog('📄 Nội dung plist:', 'info');
+        addLog('📄 ' + text, 'info');
+        
+        var parsed = parsePlist(text);
+        
+        // Log các giá trị parse được
+        addLog('📱 App Name: ' + parsed.appName, 'info');
+        addLog('📦 Bundle ID: ' + parsed.bundleId, 'info');
+        addLog('📌 Version: ' + parsed.bundleVersion, 'info');
+        addLog('📦 IPA URL: ' + parsed.ipaUrl, 'info');
+        
+        if (!parsed.ipaUrl) throw new Error('Không tìm thấy URL IPA trong plist');
+        
+        var plistId = url.split('/').pop().replace('.plist', '');
+        plistData = {
+            url: url,
+            plistId: plistId,
+            ipaUrl: parsed.ipaUrl,
+            appName: parsed.appName,
+            appSub: parsed.appSub,
+            bundleId: parsed.bundleId,
+            bundleVersion: parsed.bundleVersion,
+            rawContent: text
+        };
+        
+        // Cập nhật UI
+        previewTitle.textContent = plistData.appName;
+        previewSub.textContent = plistData.appSub;
+        previewBundleId.textContent = plistData.bundleId;
+        previewVersion.textContent = plistData.bundleVersion;
+        previewIpaUrl.textContent = plistData.ipaUrl;
+        previewPlistId.textContent = plistData.plistId;
+        appPreview.style.display = 'block';
+        
+        addLog('✅ Đã tải plist thành công', 'success');
+        addLog('📱 Ứng dụng: ' + plistData.appName, 'info');
+        addLog('📦 Bundle ID: ' + plistData.bundleId, 'info');
+        addLog('📌 Version: ' + plistData.bundleVersion, 'info');
+        addLog('📦 IPA URL: ' + plistData.ipaUrl, 'info');
+        
+        mirrorBtn.disabled = false;
+        setStatus('Đã tải plist', 'success');
+        
+        return plistData;
+    } catch (error) {
+        addLog('❌ Lỗi tải plist: ' + error.message, 'error');
+        setStatus('Lỗi tải plist', 'error');
+        throw error;
+    }
+}
 
         // ============================================================
         // DOWNLOAD IPA
