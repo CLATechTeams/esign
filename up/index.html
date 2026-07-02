@@ -1533,112 +1533,169 @@ window.selectAndUpdateApp = function(index) {
             }
         }
 
-        async function updateSelectedAppLink() {
-            if (isUpdating) {
-                addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
-                return;
-            }
-            
-            if (!selectedApp) {
-                addLog('⚠️ Vui lòng chọn app trước', 'error');
-                return;
-            }
+async function updateSelectedAppLink() {
+    if (isUpdating) {
+        addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
+        return;
+    }
+    
+    if (!selectedApp) {
+        addLog('⚠️ Vui lòng chọn app trước', 'error');
+        return;
+    }
 
-            var newLink = resultLink.value;
-            if (!newLink || newLink.indexOf('itms-services://') === -1) {
-                addLog('⚠️ Chưa có link ITMS mới. Vui lòng mirror thành công trước!', 'error');
-                addLog('💡 Hướng dẫn: Nhập URL plist → "Lấy thông tin" → "Bắt đầu Mirror"', 'info');
-                return;
-            }
+    var newLink = resultLink.value;
+    if (!newLink || newLink.indexOf('itms-services://') === -1) {
+        addLog('⚠️ Chưa có link ITMS mới. Vui lòng mirror thành công trước!', 'error');
+        addLog('💡 Hướng dẫn: Nhập URL plist → "Lấy thông tin" → "Bắt đầu Mirror"', 'info');
+        return;
+    }
 
-            var token = getToken();
-            if (!token) return;
+    var token = getToken();
+    if (!token) return;
 
-            var repoInfo = getRepoInfo();
-            if (!repoInfo) return;
+    var repoInfo = getRepoInfo();
+    if (!repoInfo) return;
 
-            isUpdating = true;
-            updateStatusBadge.textContent = '⏳ Đang cập nhật...';
-            updateStatusBadge.style.color = '#d29922';
+    isUpdating = true;
+    updateStatusBadge.textContent = '⏳ Đang cập nhật...';
+    updateStatusBadge.style.color = '#d29922';
 
-            addLog('🔄 Đang cập nhật link cho "' + selectedApp.title + '" trên trang index...', 'info');
+    addLog('🔄 Đang cập nhật link cho "' + selectedApp.title + '" trên trang index...', 'info');
 
-            try {
-                var indexPath = indexPagePath.value.trim() || 'index.html';
+    try {
+        var indexPath = indexPagePath.value.trim() || 'index.html';
 
-                addLog('📥 Đang tải file ' + indexPath + ' từ GitHub...', 'info');
-                var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
-                var sha = result.sha;
-                var content = atob(result.content);
-                addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
+        addLog('📥 Đang tải file ' + indexPath + ' từ GitHub...', 'info');
+        var result = await githubRequest('/contents/' + indexPath, 'GET', null, token, repoInfo, true);
+        var sha = result.sha;
+        var content = atob(result.content);
+        addLog('✅ Đã tải file, dung lượng: ' + content.length + ' ký tự', 'success');
 
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(content, 'text/html');
+        // ===== DÙNG REGEX ĐỂ TÌM VÀ THAY THẾ =====
+        var targetId = currentAppType === 'esign' ? 'esign-list' : 'ksign-list';
+        var containerStart = '<div class="' + currentAppType + '-section" id="' + targetId + '">';
+        var containerEnd = '</div>';
 
-                var container;
-                if (currentAppType === 'esign') {
-                    container = doc.getElementById('esign-list') || doc.querySelector('#esign-content .esign-section') || doc.querySelector('.esign-section');
-                } else {
-                    container = doc.getElementById('ksign-list') || doc.querySelector('#ksign-content .ksign-section') || doc.querySelector('.ksign-section');
+        var startIndex = content.indexOf(containerStart);
+        if (startIndex === -1) {
+            // Thử tìm cách khác
+            var altStart = '<div id="' + targetId + '" class="' + currentAppType + '-section">';
+            startIndex = content.indexOf(altStart);
+            if (startIndex === -1) {
+                // Tìm bất kỳ container nào có id
+                var idPattern = new RegExp('<div[^>]*id="' + targetId + '"[^>]*>', 'i');
+                var idMatch = content.match(idPattern);
+                if (idMatch) {
+                    startIndex = content.indexOf(idMatch[0]);
+                    containerStart = idMatch[0];
                 }
-
-                if (!container) {
-                    var rows = doc.querySelectorAll('.app-row');
-                    if (rows.length > 0) {
-                        container = rows[0].parentElement;
-                        addLog('⚠️ Dùng container từ parent của .app-row đầu tiên', 'info');
-                    } else {
-                        throw new Error('Không tìm thấy container #' + currentAppType + '-list trong HTML');
-                    }
-                }
-
-                var appRows = container.querySelectorAll('.app-row');
-                if (selectedApp.index >= appRows.length) {
-                    throw new Error('Không tìm thấy app index ' + selectedApp.index + ' trong HTML');
-                }
-
-                var targetRow = appRows[selectedApp.index];
-                var oldLink = targetRow.getAttribute('href');
-                addLog('📝 Link cũ: ' + (oldLink || 'chưa có'), 'info');
-
-                targetRow.setAttribute('href', newLink);
-                addLog('📝 Link mới: ' + newLink, 'success');
-
-                var newHtml = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-                var base64Content = btoa(unescape(encodeURIComponent(newHtml)));
-
-                var updateData = {
-                    message: 'Auto update link for ' + selectedApp.title + ' - ' + new Date().toLocaleString(),
-                    content: base64Content,
-                    sha: sha,
-                    branch: repoInfo.branch || 'main'
-                };
-
-                addLog('📤 Đang upload file lên GitHub...', 'info');
-                await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
-
-                addLog('✅ Đã cập nhật link cho "' + selectedApp.title + '" thành công!', 'success');
-                var pageUrl = 'https://' + repoInfo.owner + '.github.io/' + repoInfo.repo + '/';
-                addLog('🔗 Xem tại: ' + pageUrl, 'link');
-
-                updateStatusBadge.textContent = '✅ Đã cập nhật!';
-                updateStatusBadge.style.color = '#3fb950';
-                selectedAppNewLink.textContent = newLink;
-
-                // Cập nhật lại danh sách
-                await loadAppsFromIndexPage(currentAppType);
-                setStatus('Đã cập nhật app ✅', 'success');
-
-            } catch (error) {
-                addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
-                if (error.stack) addLog('📚 Stack: ' + error.stack.substring(0, 500) + '...', 'error');
-                setStatus('Cập nhật thất bại', 'error');
-                updateStatusBadge.textContent = '❌ Thất bại';
-                updateStatusBadge.style.color = '#f85149';
-            } finally {
-                isUpdating = false;
+            } else {
+                containerStart = altStart;
             }
         }
+        
+        if (startIndex === -1) {
+            throw new Error('Không tìm thấy container #' + targetId);
+        }
+
+        var endIndex = content.indexOf(containerEnd, startIndex + containerStart.length);
+        if (endIndex === -1) {
+            throw new Error('Không tìm thấy đóng container #' + targetId);
+        }
+        endIndex += containerEnd.length;
+
+        var containerContent = content.substring(startIndex, endIndex);
+        addLog('📦 Tìm thấy container, độ dài: ' + containerContent.length + ' ký tự', 'info');
+
+        // Tìm tất cả app-row
+        var appRegex = /<a[^>]*class="app-row"[^>]*>/g;
+        var appMatches = [];
+        var match;
+        while ((match = appRegex.exec(containerContent)) !== null) {
+            appMatches.push(match);
+        }
+        
+        addLog('📱 Tìm thấy ' + appMatches.length + ' app trong container', 'info');
+
+        if (selectedApp.index >= appMatches.length) {
+            throw new Error('Không tìm thấy app index ' + selectedApp.index + ' (có ' + appMatches.length + ' app)');
+        }
+
+        var appTag = appMatches[selectedApp.index][0];
+        addLog('🎯 Tìm thấy app tag: ' + appTag.substring(0, 100) + '...', 'info');
+
+        // Lấy link cũ từ tag
+        var oldLinkMatch = appTag.match(/href="([^"]*)"/);
+        var oldLink = oldLinkMatch ? oldLinkMatch[1] : null;
+        addLog('📝 Link cũ: ' + (oldLink || 'chưa có'), 'info');
+
+        // Kiểm tra link trùng
+        if (oldLink === newLink) {
+            addLog('⚠️ Link cũ và link mới giống nhau!', 'warning');
+            addLog('💡 App "' + selectedApp.title + '" đã có link này rồi.', 'warning');
+            isUpdating = false;
+            updateStatusBadge.textContent = '⏭️ Đã có link';
+            updateStatusBadge.style.color = '#d29922';
+            return;
+        }
+
+        // Tạo tag mới với link mới
+        var newAppTag = appTag.replace(/href="[^"]*"/, 'href="' + newLink + '"');
+        addLog('📝 Tag mới: ' + newAppTag.substring(0, 100) + '...', 'info');
+
+        // Thay thế trong container content
+        var newContainerContent = containerContent.replace(appTag, newAppTag);
+
+        // Tạo HTML mới
+        var newContent = content.substring(0, startIndex) + newContainerContent + content.substring(endIndex);
+        addLog('📄 HTML mới dài: ' + newContent.length + ' ký tự', 'info');
+
+        // ===== MÃ HÓA UTF-8 ĐÚNG CÁCH =====
+        function utf8ToBase64(str) {
+            var bytes = new TextEncoder().encode(str);
+            var binary = '';
+            for (var i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+        
+        var base64Content = utf8ToBase64(newContent);
+        addLog('✅ Mã hóa UTF-8 thành công', 'success');
+
+        var updateData = {
+            message: 'Auto update link for ' + selectedApp.title + ' - ' + new Date().toLocaleString(),
+            content: base64Content,
+            sha: sha,
+            branch: repoInfo.branch || 'main'
+        };
+
+        addLog('📤 Đang upload file lên GitHub...', 'info');
+        await githubRequest('/contents/' + indexPath, 'PUT', updateData, token, repoInfo, true);
+
+        addLog('✅ Đã cập nhật link cho "' + selectedApp.title + '" thành công!', 'success');
+        var pageUrl = 'https://' + repoInfo.owner + '.github.io/' + repoInfo.repo + '/';
+        addLog('🔗 Xem tại: ' + pageUrl, 'link');
+
+        updateStatusBadge.textContent = '✅ Đã cập nhật!';
+        updateStatusBadge.style.color = '#3fb950';
+        selectedAppNewLink.textContent = newLink;
+
+        // Cập nhật lại danh sách
+        await loadAppsFromIndexPage(currentAppType);
+        setStatus('Đã cập nhật app ✅', 'success');
+
+    } catch (error) {
+        addLog('❌ Lỗi cập nhật: ' + error.message, 'error');
+        if (error.stack) addLog('📚 Stack: ' + error.stack.substring(0, 500) + '...', 'error');
+        setStatus('Cập nhật thất bại', 'error');
+        updateStatusBadge.textContent = '❌ Thất bại';
+        updateStatusBadge.style.color = '#f85149';
+    } finally {
+        isUpdating = false;
+    }
+}
 
         // ============================================================
         // EVENT LISTENERS
