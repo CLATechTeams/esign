@@ -1431,24 +1431,31 @@
             }
         }
 
-        // ===== HÀM CHỌN APP VÀ TỰ ĐỘNG CẬP NHẬT =====
-        window.selectAndUpdateApp = function(index) {
-            if (isUpdating) {
-                addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
-                return;
-            }
-            
-            if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
-                selectedApp = currentAppList[index];
-                renderAppList();
-                updateSelectedPreview();
-                if (appListSelect) appListSelect.selectedIndex = index;
-                addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
-                if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
-                
-                
-            }
-        };
+window.selectAndUpdateApp = function(index) {
+    if (isUpdating) {
+        addLog('⏳ Đang cập nhật, vui lòng chờ...', 'warning');
+        return;
+    }
+    
+    if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
+        selectedApp = currentAppList[index];
+        renderAppList();
+        updateSelectedPreview();
+        if (appListSelect) appListSelect.selectedIndex = index;
+        addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
+        if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
+        
+        // ===== THÊM PHẦN NÀY =====
+        // Kiểm tra có link mới không và tự động cập nhật
+        var newLink = resultLink.value;
+        if (newLink && newLink.indexOf('itms-services://') !== -1) {
+            addLog('🔄 Tự động cập nhật link cho "' + selectedApp.title + '"...', 'info');
+            updateSelectedAppLink();
+        } else {
+            addLog('💡 Chưa có link mới. Hãy mirror IPA trước.', 'warning');
+        }
+    }
+};
 
         async function loadAppsFromIndexPage(type) {
             var token = getToken();
@@ -1512,11 +1519,9 @@
                 addLog('✅ Đã tải ' + currentAppList.length + ' ứng dụng ' + typeName, 'success');
 
                 if (currentAppList.length > 0) {
-                    selectedApp = currentAppList[0];
+                    selectedApp = null;
                     renderAppList();
                     updateSelectedPreview();
-                    
-                   
                 }
                 setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
             } catch (error) {
