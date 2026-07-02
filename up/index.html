@@ -1200,7 +1200,6 @@
             resultBox.style.display = 'none';
             setStatus('Đang xử lý...', 'processing');
 
-            checkUpdateButtonStatus();
             try {
                 addLog('🔍 Kiểm tra kết nối GitHub...', 'info');
                 var repoExists = await checkRepoAccess(token, repoInfo);
@@ -1237,6 +1236,7 @@
                     processedCountEl.textContent = processedCount;
                     totalSizeEl.textContent = (totalSize / 1024 / 1024).toFixed(1) + ' MB';
                     lastUpdateEl.textContent = new Date().toLocaleTimeString();
+                    checkUpdateButtonStatus(); 
                     addLog('🎉 Mirror hoàn tất!', 'success');
                     addLog('📱 Bundle ID: ' + plistData.bundleId, 'info');
                     addLog('📌 Version: ' + plistData.bundleVersion, 'info');
@@ -1396,17 +1396,17 @@
             }
         }
 
-        window.selectApp = function(index) {
-            if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
-                selectedApp = currentAppList[index];
-                renderAppList();
-                updateSelectedPreview();
-                checkUpdateButtonStatus();
-                if (appListSelect) appListSelect.selectedIndex = index;
-                addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
-                if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
-            }
-        };
+window.selectApp = function(index) {
+    if (typeof index === 'number' && index >= 0 && index < currentAppList.length) {
+        selectedApp = currentAppList[index];
+        renderAppList();
+        updateSelectedPreview();
+        checkUpdateButtonStatus(); // <--- Thêm dòng này
+        if (appListSelect) appListSelect.selectedIndex = index;
+        addLog('📱 Đã chọn: ' + selectedApp.title + ' - ' + selectedApp.sub, 'success');
+        if (selectedApp.plistUrl) addLog('🔗 Link hiện tại: ' + selectedApp.plistUrl, 'info');
+    }
+};
 
         async function loadAppsFromIndexPage(type) {
             var token = getToken();
@@ -1473,6 +1473,7 @@
                     selectedApp = currentAppList[0];
                     renderAppList();
                     updateSelectedPreview();
+                    checkUpdateButtonStatus();
                 }
                 setStatus('Đã tải ' + currentAppList.length + ' app ' + typeName, 'success');
             } catch (error) {
@@ -1594,15 +1595,23 @@
 }
 // ===== Kiểm tra trạng thái nút cập nhật =====
 function checkUpdateButtonStatus() {
-    if (selectedApp && resultLink.value && resultLink.value.indexOf('itms-services://') !== -1) {
+    var hasLink = resultLink.value && resultLink.value.indexOf('itms-services://') !== -1;
+    
+    if (selectedApp && hasLink) {
         updateAppLinkBtn.disabled = false;
-        updateAppLinkBtn.title = 'Có link mới để cập nhật';
-    } else if (selectedApp) {
+        updateAppLinkBtn.title = '✅ Có link mới để cập nhật';
+        updateAppLinkBtn.style.opacity = '1';
+        updateAppLinkBtn.style.cursor = 'pointer';
+        addLog('🔓 Nút cập nhật đã được mở khóa', 'success');
+    } else if (selectedApp && !hasLink) {
         updateAppLinkBtn.disabled = true;
-        updateAppLinkBtn.title = 'Chưa có link mới, hãy mirror trước';
+        updateAppLinkBtn.title = '⚠️ Chưa có link mới, hãy mirror trước';
+        updateAppLinkBtn.style.opacity = '0.5';
+        addLog('🔒 Nút cập nhật bị khóa (chưa có link mới)', 'warning');
     } else {
         updateAppLinkBtn.disabled = true;
-        updateAppLinkBtn.title = 'Chưa chọn app';
+        updateAppLinkBtn.title = '⚠️ Chưa chọn app';
+        updateAppLinkBtn.style.opacity = '0.5';
     }
 }
 
@@ -1668,9 +1677,15 @@ function checkUpdateButtonStatus() {
         });
 
        // ===== Sửa lại event listener cho nút cập nhật =====
-// ===== Sửa lại event listener cho nút cập nhật =====
 updateAppLinkBtn.addEventListener('click', function() {
     addLog('🔘 Đã nhấn nút "Cập nhật link"', 'info');
+    
+    // Kiểm tra trạng thái nút
+    if (updateAppLinkBtn.disabled) {
+        addLog('⚠️ Nút đang bị khóa!', 'error');
+        addLog('💡 ' + updateAppLinkBtn.title, 'info');
+        return;
+    }
     
     // Kiểm tra đã chọn app chưa
     if (!selectedApp) {
@@ -1686,7 +1701,6 @@ updateAppLinkBtn.addEventListener('click', function() {
     if (!newLink || newLink.indexOf('itms-services://') === -1) {
         addLog('⚠️ Chưa có link ITMS mới!', 'error');
         addLog('💡 Hãy mirror IPA trước để có link mới', 'info');
-        addLog('💡 Link hiện tại: ' + (newLink || 'chưa có'), 'warning');
         return;
     }
     
