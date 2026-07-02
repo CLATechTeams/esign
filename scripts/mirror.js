@@ -1,3 +1,22 @@
+// Thêm ở đầu file script
+window.onerror = function(msg, url, line, col, error) {
+    addLog(`❌ Lỗi global: ${msg} (${url}:${line}:${col})`, 'error');
+    if (error && error.stack) {
+        addLog(`📚 ${error.stack.substring(0, 500)}`, 'error');
+    }
+    setStatus('Lỗi hệ thống', 'error');
+    isProcessing = false;
+    mirrorBtn.disabled = false;
+    mirrorBtn.textContent = '🚀 Bắt đầu Mirror';
+    return true;
+};
+
+// Thêm xử lý unhandled rejection
+window.addEventListener('unhandledrejection', function(e) {
+    addLog(`❌ Unhandled rejection: ${e.reason}`, 'error');
+    setStatus('Lỗi hệ thống', 'error');
+});
+
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
